@@ -454,7 +454,7 @@ function CulturalBridge({ entry }: { entry: CharacterEntry }) {
   const labels = [entry.idiom && '成语', entry.classic && '古诗名句'].filter(Boolean).join(' + ');
   return <details className="cultural-bridge"><summary><span>文化彩蛋</span><div><strong>{labels}</strong><small>答后选看 · 不计分、不要求背诵</small></div><i aria-hidden="true">＋</i></summary><div className="cultural-content">
     {entry.idiom && <article className="culture-item culture-item--idiom"><span>成语</span><div><h3>{entry.idiom.text}</h3><p>{entry.idiom.meaning}</p><small>怎么用：{entry.idiom.example}</small></div></article>}
-    {entry.classic && <article className="culture-item culture-item--classic"><span>名句</span><div><blockquote>{entry.classic.line}</blockquote><cite>{entry.classic.dynasty} · {entry.classic.author}《{entry.classic.title}》</cite><p>{entry.classic.note}</p></div></article>}
+    {entry.classic && <article className="culture-item culture-item--classic"><span>名句</span><div>{entry.classic.image && <figure className="classic-scene"><img src={entry.classic.image} alt={entry.classic.imageAlt ?? `${entry.classic.title}情境复原图`} loading="lazy" decoding="async" /><figcaption>原创情境复原图 · 不是历史照片或作者肖像</figcaption></figure>}<blockquote>{entry.classic.line}</blockquote><cite>{entry.classic.dynasty} · {entry.classic.author}《{entry.classic.title}》</cite><p>{entry.classic.note}</p><details className="research-note"><summary>时代与画面考据 <b>{entry.classic.evidenceLevel}</b></summary><p><strong>我们能确定：</strong>{entry.classic.historicalContext}</p><p><strong>画面怎么处理：</strong>{entry.classic.visualBasis}</p></details></div></article>}
   </div></details>;
 }
 

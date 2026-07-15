@@ -28,6 +28,11 @@ export type CharacterEntry = {
     author: string;
     dynasty: string;
     note: string;
+    historicalContext: string;
+    visualBasis: string;
+    evidenceLevel: '史实较明确' | '部分可考' | '情境复原';
+    image?: string;
+    imageAlt?: string;
   };
   idiom?: {
     text: string;

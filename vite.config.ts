@@ -25,7 +25,12 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}']
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        runtimeCaching: [{
+          urlPattern: /\/images\/classics\/.*\.jpg$/,
+          handler: 'CacheFirst',
+          options: { cacheName: 'classic-scenes-v1', expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 90 } }
+        }]
       }
     })
   ]

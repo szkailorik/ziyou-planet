@@ -17,7 +17,18 @@ type CharacterEntry = {
   englishBridges?: { zh: string; en: string }[];
   characterFamily?: { anchor: string; members: string[]; note: string };
   idiom?: { text: string; meaning: string; example: string };
-  classic?: { line: string; title: string; author: string; dynasty: string; note: string };
+  classic?: {
+    line: string;
+    title: string;
+    author: string;
+    dynasty: string;
+    note: string;
+    historicalContext: string;
+    visualBasis: string;
+    evidenceLevel: '史实较明确' | '部分可考' | '情境复原';
+    image?: string;
+    imageAlt?: string;
+  };
   sourceId: string;
   contentStatus: 'basic' | 'reviewed';
 };
