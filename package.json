@@ -1,0 +1,30 @@
+{
+  "name": "ziyou-planet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "generate:data": "node scripts/generate-characters.mjs",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "deploy:cloudflare": "npm run build && wrangler pages deploy dist --project-name ziyou-planet --branch main"
+  },
+  "dependencies": {
+    "dexie": "^4.0.11",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "pinyin-pro": "^3.27.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.2",
+    "vite-plugin-pwa": "^1.0.2",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.111.0"
+  }
+}
