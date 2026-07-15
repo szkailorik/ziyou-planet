@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
+import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
 import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
 import { createCloudFamily, getCloudStatus, joinCloudFamily, leaveCloudFamily, regenerateSyncCode, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
-type View = 'home' | 'scan' | 'review' | 'library' | 'report';
+type View = 'home' | 'scan' | 'review' | 'library' | 'poetry' | 'report';
 type ScanSession = { ids: number[]; index: number; size: number; startedAt: string };
 type ChildSession = { childId: string; nickname: string; dailyMinutes: 5 | 10 | 15; sound: boolean; englishBridge: boolean };
 type CloudUiState = { status: 'checking' | 'disconnected' | 'syncing' | 'connected' | 'error'; lastSyncAt?: string; message?: string };
@@ -251,6 +252,7 @@ export default function App() {
           <NavButton active={view === 'scan'} icon="◎" label="识字扫描" onClick={() => navigate('scan')} />
           <NavButton active={view === 'review'} icon="↻" label="复习乐园" onClick={() => navigate('review')} badge={stats.due} />
           <NavButton active={view === 'library'} icon="▦" label="我的字册" onClick={() => navigate('library')} />
+          <NavButton active={view === 'poetry'} icon="诗" label="诗词馆" onClick={() => navigate('poetry')} />
         </nav>
         <button className="parent-button" onClick={() => navigate('report')}><span>◒</span> 家长中心</button>
       </header>}
@@ -260,6 +262,7 @@ export default function App() {
         {view === 'scan' && <Scan settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} onFinish={() => { setToast(`${activeChild.nickname} 的扫描已保存`); navigate('home'); }} />}
         {view === 'review' && <Review settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} />}
         {view === 'library' && <Library progress={progress} showEnglish={settings.englishBridge} />}
+        {view === 'poetry' && <PoetryLibrary />}
         {view === 'report' && (
           parentUnlocked
             ? <Report settings={settings} activeChild={activeChild} setSettings={async (next) => { setSettings(next); await saveSettings(next); }} attempts={childAttempts} setAttempts={setAttempts} progress={progress} stats={stats} setToast={setToast} lock={() => setParentUnlocked(false)} onDataCleared={() => { setParentPinConfigured(false); setParentUnlocked(false); }} cloud={cloud} cloudActions={cloudActions} />
@@ -317,6 +320,11 @@ function Home({ settings, stats, progress, onNavigate }: { settings: ChildSessio
         <TaskCard tone="purple" icon="◎" kicker="记录当前熟悉度" title="熟悉度扫描" text="30、60 或 100 字快速查看，先记录熟悉度，再进入客观复核。" meta="约 5-12 分钟" action="开始扫描" onClick={() => onNavigate('scan')} />
         <TaskCard tone="green" icon="↻" kicker="到期优先" title="复习乐园" text={stats.due ? `有 ${stats.due} 个字到时间再见面了，听音、辨形、选读音。` : '今天没有到期字，也可以从最近见过的字里来一轮小挑战。'} meta="约 3-5 分钟" action="去复习" onClick={() => onNavigate('review')} />
         <TaskCard tone="orange" icon="▦" kicker="汉字收藏册" title="我的字册" text="按学习状态查找汉字，看看读音、词语和已经留下的证据。" meta={`${stats.scanned} 字已有记录`} action="打开字册" onClick={() => onNavigate('library')} />
+      </section>
+
+      <section className="poetry-invite">
+        <div><span className="poetry-invite-mark" aria-hidden="true">诗</span><p><span className="eyebrow">小学诗词馆 · 75 篇</span><strong>看一幅画，走进一句诗</strong><small>完整诗文、儿童释义、朝代背景和考据画面都在这里；自由探索，不计入识字分数。</small></p></div>
+        <button className="primary-button" onClick={() => onNavigate('poetry')}>进入诗词馆 <span>→</span></button>
       </section>
 
       <section className="route-card">
@@ -552,6 +560,67 @@ function Library({ progress, showEnglish }: { progress: ReturnType<typeof progre
     <div className="character-grid">{matches.slice(0, visible).map((entry) => { const item = progress.get(entry.id); return <button type="button" onClick={() => setSelected(entry)} aria-label={`${entry.char}，${entry.pinyin}，${item ? STATE_LABEL[item.state] : '未测'}`} className={`character-tile tile--${item?.state ?? 'untested'}`} key={entry.id}><div><strong>{entry.char}</strong><span>{entry.pinyin}</span></div><small>{item ? STATE_LABEL[item.state] : `字表${entry.curriculumList === 1 ? '一' : '二'}`}</small>{entry.contentStatus === 'reviewed' && <b title="词语与场景已审核">✓</b>}</button>; })}</div>
     {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 180)}>再显示 180 个</button>}
     {selected && <div className="character-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><section className="character-dialog" role="dialog" aria-modal="true" aria-labelledby="character-dialog-title" onClick={(event) => event.stopPropagation()}><button className="dialog-close" aria-label="关闭字详情" onClick={() => setSelected(null)}>×</button><div className="dialog-glyph">{selected.char}</div><div><span className="eyebrow">{selected.theme} · 课标字表{selected.curriculumList === 1 ? '一' : '二'} · {selected.contentStatus === 'reviewed' ? '内容已审核' : '基础条目'}</span><h2 id="character-dialog-title">{selected.char} <small>{selected.pinyin}</small></h2><ContextBridge entry={selected} compact showEnglish={showEnglish} /><p><strong>生活线索：</strong>{selected.scene}</p><p><strong>学习状态：</strong>{progress.get(selected.id) ? STATE_LABEL[progress.get(selected.id)!.state] : '未测'}</p><p className="source-note">公版古诗文会注明作者与篇名；教材原句须按版本和授权另行维护。基础条目的拼音只作检索提示，不进入客观读音判分。</p></div></section></div>}
+  </div>;
+}
+
+type PoetryEra = 'all' | 'early' | 'tang' | 'song' | 'late';
+
+const POETRY_ERAS: { value: PoetryEra; label: string; match: (poem: PrimaryPoem) => boolean }[] = [
+  { value: 'all', label: '全部 75', match: () => true },
+  { value: 'early', label: '汉魏北朝', match: (poem) => ['汉', '北朝'].includes(poem.dynasty) },
+  { value: 'tang', label: '唐', match: (poem) => poem.dynasty === '唐' },
+  { value: 'song', label: '宋', match: (poem) => poem.dynasty === '宋' },
+  { value: 'late', label: '元明清', match: (poem) => ['元', '明', '清'].includes(poem.dynasty) }
+];
+
+function PoetryLibrary() {
+  const [query, setQuery] = useState('');
+  const [era, setEra] = useState<PoetryEra>('all');
+  const [visible, setVisible] = useState(12);
+  const [selected, setSelected] = useState<PrimaryPoem | null>(null);
+  useEffect(() => {
+    if (!selected) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelected(null); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [selected]);
+  const matches = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    const selectedEra = POETRY_ERAS.find((item) => item.value === era)!;
+    return PRIMARY_POEMS.filter((poem) => {
+      const haystack = [poem.title, poem.author, poem.dynasty, ...poem.lines, poem.interpretation, poem.mood].join(' ').toLowerCase();
+      return selectedEra.match(poem) && (!normalized || haystack.includes(normalized));
+    });
+  }, [era, query]);
+  const poemCharacters = selected ? [...new Set(selected.lines.join('').split('').filter((char) => CHARACTER_BY_ID.has(CHARACTERS.find((entry) => entry.char === char)?.id ?? -1)))].slice(0, 18) : [];
+
+  return <div className="page poetry-page">
+    <section className="poetry-hero">
+      <div><span className="eyebrow">小学诗词馆</span><h1>75 篇诗词，<br />75 个可以走进去的世界</h1><p>依据义务教育语文课程标准小学阶段推荐篇目整理。画面帮助理解诗意，但不会替代朗读，也不计入识字掌握分。</p></div>
+      <div className="poetry-hero-seal" aria-hidden="true"><span>诗</span><small>从画入境<br />从句识字</small></div>
+    </section>
+    <div className="library-toolbar poetry-toolbar"><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="搜索诗名、作者或诗句" value={query} onChange={(event) => { setQuery(event.target.value); setVisible(12); }} placeholder="搜诗名、作者或一句诗" /></label><div className="filter-pills">{POETRY_ERAS.map((item) => <button aria-pressed={era === item.value} key={item.value} className={era === item.value ? 'active' : ''} onClick={() => { setEra(item.value); setVisible(12); }}>{item.label}</button>)}</div></div>
+    <div className="poetry-summary"><span>找到 <b>{matches.length}</b> 篇</span><span>图片为依据诗意与时代资料创作的情境复原，不是历史照片</span></div>
+    <section className="poem-grid" aria-label="小学诗词篇目">
+      {matches.slice(0, visible).map((poem) => <button type="button" className="poem-card" key={poem.slug} onClick={() => setSelected(poem)}>
+        <img src={poem.image} alt={poem.imageAlt} loading="lazy" decoding="async" />
+        <span className="poem-evidence">{poem.evidenceLevel}</span>
+        <div><small>{poem.dynasty} · {poem.author}</small><h2>{poem.title}</h2><p>{poem.lines[0]}</p><span>{poem.mood}</span></div>
+      </button>)}
+    </section>
+    {matches.length === 0 && <div className="poetry-empty"><strong>还没有找到这首诗</strong><p>可以试试诗名、作者，或输入你记得的一句。</p></div>}
+    {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 12)}>再展开 12 篇</button>}
+    <p className="source-note poetry-source">范围采用课程标准小学 1—6 年级推荐背诵的 75 篇古诗文；文本异文、作者归属与场景争议会在条目中保留说明。</p>
+    {selected && <div className="poem-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><article className="poem-dialog" role="dialog" aria-modal="true" aria-labelledby="poem-dialog-title" onClick={(event) => event.stopPropagation()}>
+      <button className="dialog-close" aria-label="关闭诗词详情" onClick={() => setSelected(null)}>×</button>
+      <figure><img src={selected.image} alt={selected.imageAlt} /><figcaption>原创诗意情境图 · {selected.evidenceLevel}</figcaption></figure>
+      <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><p className="poem-byline">{selected.author}</p>
+        <div className="poem-lines">{selected.lines.map((line) => <p key={line}>{line}</p>)}</div>
+        <section className="poem-meaning"><span aria-hidden="true">看懂</span><div><strong>这首诗在说什么？</strong><p>{selected.interpretation}</p></div></section>
+        <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>
+        <section className="poem-characters"><strong>诗中可以认一认</strong><div>{poemCharacters.map((char) => <span key={char}>{char}</span>)}</div><small>这里只做语境提示，不作为“已经认识”的证据。</small></section>
+      </div>
+    </article></div>}
   </div>;
 }
 

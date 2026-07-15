@@ -27,9 +27,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [{
-          urlPattern: /\/images\/classics\/.*\.jpg$/,
+          urlPattern: /\/images\/(classics|poems)\/.*\.jpg$/,
           handler: 'CacheFirst',
-          options: { cacheName: 'classic-scenes-v1', expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 90 } }
+          options: { cacheName: 'poetry-scenes-v2', expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 90 } }
         }]
       }
     })
