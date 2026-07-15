@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
-import { clearAllData, db, exportBackup, importBackup, loadSettings, saveSettings } from './db';
+import { clearAllData, db, exportBackup, importBackup, loadSettings, loadSyncMeta, replaceFromCloud, saveSettings } from './db';
 import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
+import { createCloudFamily, getCloudStatus, joinCloudFamily, leaveCloudFamily, regenerateSyncCode, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
 type View = 'home' | 'scan' | 'review' | 'library' | 'report';
 type ScanSession = { ids: number[]; index: number; size: number; startedAt: string };
 type ChildSession = { childId: string; nickname: string; dailyMinutes: 5 | 10 | 15; sound: boolean };
+type CloudUiState = { status: 'checking' | 'disconnected' | 'syncing' | 'connected' | 'error'; lastSyncAt?: string; message?: string };
+type CloudActions = {
+  create: (pin: string) => Promise<string>;
+  join: (syncCode: string, pin: string) => Promise<void>;
+  syncNow: () => Promise<void>;
+  leave: () => Promise<void>;
+  regenerateCode: (pin: string) => Promise<string>;
+};
 
 const STATE_LABEL: Record<MasteryState, string> = {
   untested: '未测', introduced: '初次接触', forming: '正在形成', basic: '基本掌握', stable: '稳定掌握', due: '待复习'
@@ -63,6 +72,9 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [parentUnlocked, setParentUnlocked] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [cloud, setCloud] = useState<CloudUiState>({ status: 'checking' });
+  const syncInFlight = useRef(false);
+  const lastAutoSyncKey = useRef('');
 
   useEffect(() => {
     Promise.all([loadSettings(), db.attempts.toArray()]).then(([storedSettings, storedAttempts]) => {
@@ -70,8 +82,22 @@ export default function App() {
       setAttempts(storedAttempts);
       setLoading(false);
       navigator.storage?.persist?.().catch(() => undefined);
+      getCloudStatus().then((status) => {
+        setCloud(status.connected ? { status: 'connected' } : { status: 'disconnected' });
+      }).catch((error) => {
+        setCloud({ status: 'error', message: error instanceof Error ? error.message : '云同步状态暂时不可用' });
+      });
     });
   }, []);
+
+  useEffect(() => {
+    if (loading || !settings || cloud.status !== 'connected') return;
+    const key = `${JSON.stringify(settings)}|${attempts.length}|${attempts.at(-1)?.id ?? ''}`;
+    if (key === lastAutoSyncKey.current) return;
+    lastAutoSyncKey.current = key;
+    const timer = window.setTimeout(() => void performCloudSync(settings, attempts), 1200);
+    return () => window.clearTimeout(timer);
+  }, [attempts, cloud.status, loading, settings]);
 
   useEffect(() => {
     if (!toast) return;
@@ -120,6 +146,72 @@ export default function App() {
     setAttempts((current) => [...current, event]);
   }
 
+  async function applyCloudSnapshot(snapshot: CloudSnapshot) {
+    await replaceFromCloud(snapshot.backup, snapshot.settingsUpdatedAt, snapshot.syncedAt);
+    setSettings((current) => JSON.stringify(current) === JSON.stringify(snapshot.backup.settings) ? current : snapshot.backup.settings);
+    setAttempts((current) => {
+      if (current.length === snapshot.backup.attempts.length) {
+        const ids = new Set(current.map((item) => item.id));
+        if (snapshot.backup.attempts.every((item) => ids.has(item.id))) return current;
+      }
+      return snapshot.backup.attempts;
+    });
+  }
+
+  async function performCloudSync(nextSettings = settings, nextAttempts = attempts) {
+    if (!nextSettings || syncInFlight.current) return;
+    syncInFlight.current = true;
+    setCloud((current) => ({ ...current, status: 'syncing', message: undefined }));
+    try {
+      const [backup, meta] = await Promise.all([exportBackup(nextSettings), loadSyncMeta()]);
+      backup.attempts = nextAttempts;
+      const { state } = await syncCloudState(backup, meta.settingsUpdatedAt);
+      await applyCloudSnapshot(state);
+      setCloud({ status: 'connected', lastSyncAt: state.syncedAt });
+    } catch (error) {
+      setCloud((current) => ({ status: 'error', lastSyncAt: current.lastSyncAt, message: error instanceof Error ? error.message : '云同步失败，本地记录仍已保存' }));
+    } finally {
+      syncInFlight.current = false;
+    }
+  }
+
+  const cloudActions: CloudActions = {
+    create: async (pin) => {
+      if (!settings) throw new Error('本地数据尚未加载');
+      setCloud({ status: 'syncing' });
+      try {
+        const [backup, meta] = await Promise.all([exportBackup(settings), loadSyncMeta()]);
+        const result = await createCloudFamily(pin, backup, meta.settingsUpdatedAt);
+        await applyCloudSnapshot(result.state);
+        setCloud({ status: 'connected', lastSyncAt: result.state.syncedAt });
+        return result.syncCode;
+      } catch (error) {
+        setCloud({ status: 'disconnected' });
+        throw error;
+      }
+    },
+    join: async (syncCode, pin) => {
+      setCloud({ status: 'syncing' });
+      try {
+        const result = await joinCloudFamily(syncCode, pin);
+        await applyCloudSnapshot(result.state);
+        setCloud({ status: 'connected', lastSyncAt: result.state.syncedAt });
+      } catch (error) {
+        setCloud({ status: 'disconnected' });
+        throw error;
+      }
+    },
+    syncNow: async () => {
+      if (!settings) throw new Error('本地数据尚未加载');
+      await performCloudSync(settings, attempts);
+    },
+    leave: async () => {
+      await leaveCloudFamily();
+      setCloud({ status: 'disconnected' });
+    },
+    regenerateCode: async (pin) => (await regenerateSyncCode(pin)).syncCode
+  };
+
   async function switchChild(childId: string) {
     if (!settings || settings.activeChildId === childId || !settings.children.some((child) => child.id === childId)) return;
     const next = { ...settings, activeChildId: childId };
@@ -166,12 +258,12 @@ export default function App() {
         {view === 'library' && <Library progress={progress} />}
         {view === 'report' && (
           parentUnlocked
-            ? <Report settings={settings} activeChild={activeChild} setSettings={async (next) => { setSettings(next); await saveSettings(next); }} attempts={childAttempts} setAttempts={setAttempts} progress={progress} stats={stats} setToast={setToast} lock={() => setParentUnlocked(false)} />
+            ? <Report settings={settings} activeChild={activeChild} setSettings={async (next) => { setSettings(next); await saveSettings(next); }} attempts={childAttempts} setAttempts={setAttempts} progress={progress} stats={stats} setToast={setToast} lock={() => setParentUnlocked(false)} cloud={cloud} cloudActions={cloudActions} />
             : <ParentGate unlock={() => setParentUnlocked(true)} back={() => navigate('home')} />
         )}
       </main>
 
-      {!focusMode && <footer className="footer"><span>3500 字课程字库 · 数据保存在这台设备</span><span>默认无广告 · 无账号 · 无 AI 对话</span></footer>}
+      {!focusMode && <footer className="footer"><span>3500 字课程字库 · 本地优先{cloud.status === 'connected' || cloud.status === 'syncing' ? '并已开启家庭云同步' : '保存'}</span><span>默认无广告 · 无 AI 对话</span></footer>}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
@@ -453,7 +545,7 @@ function ParentGate({ unlock, back }: { unlock: () => void; back: () => void }) 
   return <div className="page gate-page"><div className="gate-card"><div className="gate-icon">◒</div><span className="eyebrow">家长中心</span><h1>请家长来完成一个小问题</h1><p>儿童学习时不需要看到复杂统计、设置和数据操作。</p><label>3 + 4 = <input inputMode="numeric" value={answer} onChange={(event) => { setAnswer(event.target.value); setError(false); }} autoFocus /></label>{error && <small role="alert">再算一算，是一个一位数。</small>}<button className="primary-button" onClick={() => answer.trim() === '7' ? unlock() : setError(true)}>进入家长中心</button><button className="text-button" onClick={back}>返回儿童模式</button></div></div>;
 }
 
-function Report({ settings, activeChild, setSettings, attempts, setAttempts, progress, stats, setToast, lock }: { settings: AppSettings; activeChild: ChildProfile; setSettings: (settings: AppSettings) => Promise<void>; attempts: AttemptEvent[]; setAttempts: (attempts: AttemptEvent[]) => void; progress: ReturnType<typeof progressFromAttempts>; stats: ReturnType<typeof statsShape>; setToast: (text: string) => void; lock: () => void }) {
+function Report({ settings, activeChild, setSettings, attempts, setAttempts, progress, stats, setToast, lock, cloud, cloudActions }: { settings: AppSettings; activeChild: ChildProfile; setSettings: (settings: AppSettings) => Promise<void>; attempts: AttemptEvent[]; setAttempts: (attempts: AttemptEvent[]) => void; progress: ReturnType<typeof progressFromAttempts>; stats: ReturnType<typeof statsShape>; setToast: (text: string) => void; lock: () => void; cloud: CloudUiState; cloudActions: CloudActions }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uniqueList1 = [...progress.keys()].filter((id) => (CHARACTER_BY_ID.get(id)?.curriculumList ?? 2) === 1).length;
   const objective = attempts.filter((item) => item.mode !== 'self-check');
@@ -508,7 +600,9 @@ function Report({ settings, activeChild, setSettings, attempts, setAttempts, pro
   }
 
   async function handleClear() {
-    if (!window.confirm('确定删除这台设备上的全部学习记录吗？请先导出备份。')) return;
+    const connected = cloud.status === 'connected' || cloud.status === 'syncing' || Boolean(cloud.lastSyncAt);
+    if (!window.confirm(connected ? '将退出这台设备的家庭云同步并删除本机记录；其他设备和云端数据会保留。确定继续吗？' : '确定删除这台设备上的全部学习记录吗？请先导出备份。')) return;
+    if (connected) await cloudActions.leave();
     await clearAllData();
     const fresh = await loadSettings();
     setAttempts([]);
@@ -522,8 +616,57 @@ function Report({ settings, activeChild, setSettings, attempts, setAttempts, pro
     <div className="report-columns"><section className="panel"><div className="panel-title"><h2>课程层级覆盖</h2><span>不是同龄排名</span></div><Coverage label="课标字表一" detail={`${uniqueList1} / 2500 已有记录`} value={uniqueList1 / 2500} tone="purple" /><Coverage label="课标字表二" detail={`${stats.scanned - uniqueList1} / 1000 已有记录`} value={(stats.scanned - uniqueList1) / 1000} tone="orange" /><Coverage label="小学约 3000 字目标" detail={`${stats.stable} 字达到稳定证据`} value={stats.stable / 3000} tone="green" /><p className="source-note">“已有记录”不等于“已掌握”；稳定掌握需要客观题与跨日证据。</p></section>
       <section className="panel"><div className="panel-title"><h2>下一步建议</h2><span>确定性规则生成</span></div><div className="advice-list"><div><span>01</span><p><strong>{stats.due ? `先复习 ${stats.due} 个到期字` : '完成第一轮客观复核'}</strong><small>每次 3-5 分钟，不用一次做完。</small></p></div><div><span>02</span><p><strong>优先处理“不确定”和“请教我”</strong><small>看读音、词语，再在另一题型中主动回忆。</small></p></div><div><span>03</span><p><strong>不要只追求扫描总量</strong><small>能在新词和隔天复测中认出，才是真正变稳。</small></p></div></div></section></div>
     <section className="profiles-panel"><div className="panel-title"><div><span className="eyebrow">家庭档案</span><h2>Kai、Lorik 和其他孩子</h2></div><button className="secondary-button" onClick={() => void addChild()}>＋ 添加档案</button></div><div className="profile-editor-grid">{settings.children.map((child) => <article className={child.id === settings.activeChildId ? 'profile-editor profile-editor--active' : 'profile-editor'} key={child.id}><button className="profile-select" onClick={() => void setSettings({ ...settings, activeChildId: child.id })} aria-pressed={child.id === settings.activeChildId}><span>{AVATAR_ICON[child.avatar]}</span><strong>{child.id === settings.activeChildId ? '当前学习' : '切换到此档案'}</strong></button><label>昵称<input value={child.nickname} onChange={(event) => void updateChild(child.id, { nickname: event.target.value.slice(0, 12) || '孩子' })} /></label><label>每日时长<select value={child.dailyMinutes} onChange={(event) => void updateChild(child.id, { dailyMinutes: Number(event.target.value) as 5 | 10 | 15 })}><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15">15 分钟</option></select></label><button className="profile-delete" disabled={settings.children.length <= 1} onClick={() => void removeChild(child.id)}>删除档案</button></article>)}</div></section>
-    <section className="settings-panel"><div><h2>本机设置与数据</h2><p>备份包含全部儿童档案；默认不上传学习记录，AI 不影响核心流程。</p></div><label className="switch-label"><input type="checkbox" checked={settings.sound} onChange={(event) => void setSettings({ ...settings, sound: event.target.checked })} />启用设备点读声音</label><div className="data-actions"><button onClick={() => void handleExport()}>导出全家备份</button><button onClick={() => inputRef.current?.click()}>恢复全家备份</button><button className="danger-button" onClick={() => void handleClear()}>删除全部数据</button><input ref={inputRef} hidden type="file" accept="application/json" onChange={(event) => void handleImport(event)} /></div></section>
+    <CloudSyncPanel cloud={cloud} actions={cloudActions} />
+    <section className="settings-panel"><div><h2>本机设置与数据</h2><p>本地始终保留可离线使用的数据；导出备份仍可作为独立恢复手段。</p></div><label className="switch-label"><input type="checkbox" checked={settings.sound} onChange={(event) => void setSettings({ ...settings, sound: event.target.checked })} />启用设备点读声音</label><div className="data-actions"><button onClick={() => void handleExport()}>导出全家备份</button><button onClick={() => inputRef.current?.click()}>恢复全家备份</button><button className="danger-button" onClick={() => void handleClear()}>删除本机数据</button><input ref={inputRef} hidden type="file" accept="application/json" onChange={(event) => void handleImport(event)} /></div></section>
   </div>;
+}
+
+function CloudSyncPanel({ cloud, actions }: { cloud: CloudUiState; actions: CloudActions }) {
+  const [mode, setMode] = useState<'home' | 'create' | 'join' | 'code'>('home');
+  const [pin, setPin] = useState('');
+  const [pinAgain, setPinAgain] = useState('');
+  const [syncCode, setSyncCode] = useState('');
+  const [issuedCode, setIssuedCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function run(task: () => Promise<void>) {
+    setBusy(true); setError('');
+    try { await task(); } catch (reason) { setError(reason instanceof Error ? reason.message : '操作未完成'); }
+    finally { setBusy(false); }
+  }
+
+  function reset(next: typeof mode = 'home') {
+    setMode(next); setPin(''); setPinAgain(''); setSyncCode(''); setIssuedCode(''); setError('');
+  }
+
+  const connected = cloud.status === 'connected' || cloud.status === 'syncing' || (cloud.status === 'error' && Boolean(cloud.lastSyncAt));
+  return <section className="cloud-panel">
+    <div className="panel-title"><div><span className="eyebrow">跨设备存储</span><h2>家庭云同步</h2></div><span className={`cloud-badge cloud-badge--${connected ? 'on' : cloud.status === 'error' ? 'error' : 'off'}`}>{cloud.status === 'syncing' ? '同步中…' : connected ? '已连接' : cloud.status === 'checking' ? '检查中…' : '未开启'}</span></div>
+    {mode === 'home' && <>
+      <p className="cloud-explain">学习记录先写入本机，再通过 Cloudflare D1 合并到家庭空间。断网时可以继续使用，恢复网络后自动补传。</p>
+      {cloud.message && <p className="cloud-error" role="alert">{cloud.message}</p>}
+      {connected ? <div className="cloud-actions">
+        <div className="cloud-last"><strong>✓ Kai、Lorik 的档案可跨设备使用</strong><small>{cloud.lastSyncAt ? `最近同步：${new Date(cloud.lastSyncAt).toLocaleString('zh-CN')}` : '正在准备第一次同步'}</small></div>
+        <button onClick={() => void run(actions.syncNow)} disabled={busy || cloud.status === 'syncing'}>立即同步</button>
+        <button onClick={() => reset('code')}>让另一台设备加入</button>
+        <button className="quiet-button" onClick={() => void run(async () => { if (window.confirm('退出后，本机数据会保留，但不再自动同步。确定继续吗？')) { await actions.leave(); reset(); } })}>退出此设备</button>
+      </div> : <div className="cloud-choice-grid">
+        <button onClick={() => reset('create')}><span>☁</span><strong>开启家庭同步</strong><small>把这台设备上的现有数据作为家庭数据</small></button>
+        <button onClick={() => reset('join')}><span>↔</span><strong>加入已有家庭</strong><small>输入另一台设备生成的同步码</small></button>
+      </div>}
+    </>}
+    {mode === 'create' && !issuedCode && <div className="cloud-form"><h3>设置 6 位家长 PIN</h3><p>PIN 与高强度家庭同步码一起用于添加新设备。请勿使用生日或连续数字。</p><label>家长 PIN<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label><label>再次输入<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pinAgain} onChange={(event) => setPinAgain(event.target.value.replace(/\D/g, ''))} placeholder="再次确认" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => { if (pin.length !== 6) throw new Error('请输入 6 位家长 PIN'); if (pin !== pinAgain) throw new Error('两次 PIN 不一致'); setIssuedCode(await actions.create(pin)); })}>{busy ? '正在建立…' : '建立家庭空间'}</button></div></div>}
+    {mode === 'create' && issuedCode && <SyncCodeCard code={issuedCode} onDone={() => reset()} />}
+    {mode === 'join' && <div className="cloud-form"><h3>加入已有家庭</h3><p>加入后会用家庭云端数据替换这台设备当前的默认档案；请先导出需要保留的本机备份。</p><label>家庭同步码<input autoCapitalize="characters" autoComplete="off" value={syncCode} onChange={(event) => setSyncCode(event.target.value.toUpperCase())} placeholder="ZIYOU-XXXX-XXXX-XXXX-XXXX" /></label><label>家长 PIN<input inputMode="numeric" autoComplete="current-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => { await actions.join(syncCode, pin); reset(); })}>{busy ? '正在加入…' : '加入并下载家庭数据'}</button></div></div>}
+    {mode === 'code' && !issuedCode && <div className="cloud-form"><h3>生成新的家庭同步码</h3><p>新同步码只用于添加设备；已连接的设备不会退出，旧同步码会立即失效。</p><label>家长 PIN<input inputMode="numeric" autoComplete="current-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => setIssuedCode(await actions.regenerateCode(pin)))}>{busy ? '正在生成…' : '生成新同步码'}</button></div></div>}
+    {mode === 'code' && issuedCode && <SyncCodeCard code={issuedCode} onDone={() => reset()} />}
+  </section>;
+}
+
+function SyncCodeCard({ code, onDone }: { code: string; onDone: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return <div className="sync-code-card"><span>家庭同步码</span><strong>{code}</strong><p>请把同步码和家长 PIN 分开保管。同步码只显示这一次；遗失后可在已连接设备上重新生成。</p><div><button onClick={() => void navigator.clipboard.writeText(code).then(() => setCopied(true))}>{copied ? '已复制' : '复制同步码'}</button><button className="primary-button" onClick={onDone}>我已妥善保存</button></div></div>;
 }
 
 function Metric({ icon, tone, label, value, note }: { icon: string; tone: string; label: string; value: number; note: string }) {

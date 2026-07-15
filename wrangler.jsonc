@@ -3,5 +3,12 @@
   "name": "ziyou-planet",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-07-15",
-  "send_metrics": false
+  "send_metrics": false,
+  "d1_databases": [
+    {
+      "binding": "ZIYOU_DB",
+      "database_name": "ziyou-planet-data",
+      "database_id": "6f294340-9397-4186-b37c-11cad3c0abb6"
+    }
+  ]
 }

@@ -1,6 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { AppSettings, AttemptEvent, BackupPayload, ChildAvatar, ChildProfile } from './types';
 
+export type SyncMeta = {
+  key: 'cloud';
+  settingsUpdatedAt: string;
+  lastSyncAt?: string;
+};
+
 type LegacySettings = {
   childId: string;
   nickname: string;
@@ -38,6 +44,7 @@ export function migrateSettings(value: AppSettings | LegacySettings): AppSetting
 class ZiyouDatabase extends Dexie {
   attempts!: EntityTable<AttemptEvent, 'id'>;
   settings!: EntityTable<{ key: string; value: AppSettings | LegacySettings }, 'key'>;
+  syncMeta!: EntityTable<SyncMeta, 'key'>;
 
   constructor() {
     super('ziyou-planet');
@@ -49,6 +56,11 @@ class ZiyouDatabase extends Dexie {
       attempts: 'id, childId, characterId, occurredAt, mode',
       settings: 'key'
     });
+    this.version(3).stores({
+      attempts: 'id, childId, characterId, occurredAt, mode',
+      settings: 'key',
+      syncMeta: 'key'
+    });
   }
 }
 
@@ -59,15 +71,34 @@ export async function loadSettings(): Promise<AppSettings> {
   if (row) {
     const migrated = migrateSettings(row.value);
     if (!('children' in row.value)) await saveSettings(migrated);
+    if (!await db.syncMeta.get('cloud')) await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt: new Date().toISOString() });
     return migrated;
   }
   const fresh = createDefaultSettings();
-  await db.settings.put({ key: 'main', value: fresh });
+  const now = new Date().toISOString();
+  await db.transaction('rw', db.settings, db.syncMeta, async () => {
+    await db.settings.put({ key: 'main', value: fresh });
+    await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt: now });
+  });
   return fresh;
 }
 
-export async function saveSettings(value: AppSettings) {
-  await db.settings.put({ key: 'main', value });
+export async function saveSettings(value: AppSettings, options: { markChanged?: boolean } = {}) {
+  await db.transaction('rw', db.settings, db.syncMeta, async () => {
+    await db.settings.put({ key: 'main', value });
+    if (options.markChanged !== false) {
+      const current = await db.syncMeta.get('cloud');
+      await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt: new Date().toISOString(), lastSyncAt: current?.lastSyncAt });
+    }
+  });
+}
+
+export async function loadSyncMeta(): Promise<SyncMeta> {
+  const current = await db.syncMeta.get('cloud');
+  if (current) return current;
+  const fresh: SyncMeta = { key: 'cloud', settingsUpdatedAt: new Date().toISOString() };
+  await db.syncMeta.put(fresh);
+  return fresh;
 }
 
 export async function exportBackup(settings: AppSettings): Promise<BackupPayload> {
@@ -85,14 +116,25 @@ export async function exportBackup(settings: AppSettings): Promise<BackupPayload
 
 export async function importBackup(payload: BackupPayload) {
   validateBackup(payload);
-  await db.transaction('rw', db.attempts, db.settings, async () => {
+  await db.transaction('rw', db.attempts, db.settings, db.syncMeta, async () => {
     await db.attempts.clear();
     await db.attempts.bulkPut(payload.attempts);
     await db.settings.put({ key: 'main', value: payload.settings });
+    await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt: new Date().toISOString() });
   });
 }
 
-function validateBackup(payload: BackupPayload) {
+export async function replaceFromCloud(payload: BackupPayload, settingsUpdatedAt: string, syncedAt: string) {
+  validateBackup(payload);
+  await db.transaction('rw', db.attempts, db.settings, db.syncMeta, async () => {
+    await db.attempts.clear();
+    await db.attempts.bulkPut(payload.attempts);
+    await db.settings.put({ key: 'main', value: payload.settings });
+    await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt, lastSyncAt: syncedAt });
+  });
+}
+
+export function validateBackup(payload: BackupPayload) {
   if (!payload || payload.format !== 'ziyou-planet-backup' || payload.version !== 2 || payload.schemaVersion !== 2 || payload.catalogVersion !== 'curriculum-2022-v1' || payload.ruleVersion !== 'v1' || !Array.isArray(payload.attempts)) {
     throw new Error('备份版本不受支持');
   }
@@ -124,8 +166,9 @@ function validateBackup(payload: BackupPayload) {
 }
 
 export async function clearAllData() {
-  await db.transaction('rw', db.attempts, db.settings, async () => {
+  await db.transaction('rw', db.attempts, db.settings, db.syncMeta, async () => {
     await db.attempts.clear();
     await db.settings.clear();
+    await db.syncMeta.clear();
   });
 }

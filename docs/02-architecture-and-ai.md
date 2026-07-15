@@ -10,7 +10,7 @@
 
 参考：[Apple：Use Safari web apps on Mac](https://support.apple.com/en-ie/104996)、[MDN：离线 PWA](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation)。
 
-## ADR-002：本地优先、无账号
+## ADR-002：本地优先、家庭同步可选
 
 ```text
 版本化课程字库
@@ -33,10 +33,16 @@ IndexedDB 本地存储
   └─ 设置/内容版本
 
 监护人可选开启：
+同域 Pages Functions → D1 家庭空间
+  ├─ HttpOnly 设备会话
+  ├─ 家庭设置的版本合并
+  └─ 追加式作答事件去重
+
+监护人可选开启：
 脱敏摘要 → 自有 AI Gateway → 模型适配器 → 受约束建议
 ```
 
-核心域逻辑不得依赖 React，使其以后可复用到 Tauri、移动端或服务端。默认不需要后端数据库、登录和云同步。调用 `navigator.storage.persist()` 争取持久存储，同时提供显眼的备份与恢复，因为浏览器数据仍可能被用户清理。
+核心域逻辑不得依赖 React，使其以后可复用到 Tauri、移动端或服务端。默认只使用本地数据库；家长可主动开启不要求邮箱、手机号或儿童实名的家庭同步。调用 `navigator.storage.persist()` 争取持久存储，同时提供显眼的备份与恢复，因为浏览器数据仍可能被用户清理。云端同步细节见 [跨设备同步设计](06-cross-device-sync.md)。
 
 参考：[MDN IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)、[MDN 存储配额与清理](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)。
 
@@ -76,7 +82,7 @@ IndexedDB 本地存储
 
 ## ADR-005：未成年人安全与隐私
 
-默认只生成随机本地 ID 和昵称，不要求真实姓名、学校、班级、生日、手机号或定位。默认不保存原始录音、照片和手写图。
+默认只生成随机 ID 和昵称，不要求真实姓名、学校、班级、生日、手机号或定位。默认不保存原始录音、照片和手写图。家庭云同步必须由家长主动建立；GitHub 仅保存代码，不保存学习轨迹或家庭凭证。
 
 以后若增加云端识音：
 
@@ -94,4 +100,3 @@ IndexedDB 本地存储
 ## AI 输出门禁
 
 运行时生成内容必须通过：JSON Schema、目标字存在校验、允许字比例、句长/年级限制、敏感内容过滤、读音/释义词典校验和模板回退。界面显示“AI 生成建议”，不得伪装成教材原文或老师结论。
-
