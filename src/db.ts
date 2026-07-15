@@ -15,6 +15,40 @@ type LegacySettings = {
   aiEnabled: false;
 };
 
+export type ParentAuthRecord = {
+  key: 'pin';
+  salt: string;
+  hash: string;
+  failedAttempts: number;
+  lockedUntil?: string;
+};
+
+const PIN_ITERATIONS = 100_000;
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCK_MS = 60_000;
+
+function bytesToBase64(bytes: Uint8Array) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(value: string) {
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+}
+
+async function pinHash(pin: string, salt: Uint8Array) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const saltBuffer = salt.slice().buffer as ArrayBuffer;
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: saltBuffer, iterations: PIN_ITERATIONS }, key, 256);
+  return new Uint8Array(bits);
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array) {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) diff |= left[index] ^ right[index];
+  return diff === 0;
+}
+
 function createChild(nickname: string, avatar: ChildAvatar, dailyMinutes: 5 | 10 | 15 = 10, id: string = crypto.randomUUID()): ChildProfile {
   return { id, nickname, avatar, dailyMinutes, createdAt: new Date().toISOString() };
 }
@@ -25,18 +59,22 @@ export function createDefaultSettings(): AppSettings {
     activeChildId: kai.id,
     children: [kai, createChild('Lorik', 'planet')],
     sound: true,
+    englishBridge: true,
     aiEnabled: false
   };
 }
 
 export function migrateSettings(value: AppSettings | LegacySettings): AppSettings {
-  if ('children' in value && Array.isArray(value.children) && value.children.length > 0) return value;
+  if ('children' in value && Array.isArray(value.children) && value.children.length > 0) {
+    return { ...value, englishBridge: value.englishBridge ?? true, aiEnabled: false };
+  }
   const legacy = value as LegacySettings;
   const kai = createChild(legacy.nickname === '小探险家' ? 'Kai' : legacy.nickname, 'rocket', legacy.dailyMinutes, legacy.childId);
   return {
     activeChildId: kai.id,
     children: [kai, createChild('Lorik', 'planet', legacy.dailyMinutes)],
     sound: legacy.sound,
+    englishBridge: true,
     aiEnabled: false
   };
 }
@@ -45,6 +83,7 @@ class ZiyouDatabase extends Dexie {
   attempts!: EntityTable<AttemptEvent, 'id'>;
   settings!: EntityTable<{ key: string; value: AppSettings | LegacySettings }, 'key'>;
   syncMeta!: EntityTable<SyncMeta, 'key'>;
+  parentAuth!: EntityTable<ParentAuthRecord, 'key'>;
 
   constructor() {
     super('ziyou-planet');
@@ -61,6 +100,12 @@ class ZiyouDatabase extends Dexie {
       settings: 'key',
       syncMeta: 'key'
     });
+    this.version(4).stores({
+      attempts: 'id, childId, characterId, occurredAt, mode',
+      settings: 'key',
+      syncMeta: 'key',
+      parentAuth: 'key'
+    });
   }
 }
 
@@ -70,7 +115,7 @@ export async function loadSettings(): Promise<AppSettings> {
   const row = await db.settings.get('main');
   if (row) {
     const migrated = migrateSettings(row.value);
-    if (!('children' in row.value)) await saveSettings(migrated);
+    if (!('children' in row.value) || !('englishBridge' in row.value)) await saveSettings(migrated);
     if (!await db.syncMeta.get('cloud')) await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt: new Date().toISOString() });
     return migrated;
   }
@@ -116,20 +161,22 @@ export async function exportBackup(settings: AppSettings): Promise<BackupPayload
 
 export async function importBackup(payload: BackupPayload) {
   validateBackup(payload);
+  const settings = migrateSettings(payload.settings);
   await db.transaction('rw', db.attempts, db.settings, db.syncMeta, async () => {
     await db.attempts.clear();
     await db.attempts.bulkPut(payload.attempts);
-    await db.settings.put({ key: 'main', value: payload.settings });
+    await db.settings.put({ key: 'main', value: settings });
     await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt: new Date().toISOString() });
   });
 }
 
 export async function replaceFromCloud(payload: BackupPayload, settingsUpdatedAt: string, syncedAt: string) {
   validateBackup(payload);
+  const settings = migrateSettings(payload.settings);
   await db.transaction('rw', db.attempts, db.settings, db.syncMeta, async () => {
     await db.attempts.clear();
     await db.attempts.bulkPut(payload.attempts);
-    await db.settings.put({ key: 'main', value: payload.settings });
+    await db.settings.put({ key: 'main', value: settings });
     await db.syncMeta.put({ key: 'cloud', settingsUpdatedAt, lastSyncAt: syncedAt });
   });
 }
@@ -166,9 +213,37 @@ export function validateBackup(payload: BackupPayload) {
 }
 
 export async function clearAllData() {
-  await db.transaction('rw', db.attempts, db.settings, db.syncMeta, async () => {
+  await db.transaction('rw', db.attempts, db.settings, db.syncMeta, db.parentAuth, async () => {
     await db.attempts.clear();
     await db.settings.clear();
     await db.syncMeta.clear();
+    await db.parentAuth.clear();
   });
+}
+
+export async function hasParentPin() {
+  return Boolean(await db.parentAuth.get('pin'));
+}
+
+export async function setParentPin(pin: string) {
+  if (!/^\d{6}$/.test(pin)) throw new Error('请设置 6 位数字 PIN');
+  if (/^(\d)\1{5}$/.test(pin) || ['123456', '654321', '012345', '987654'].includes(pin)) throw new Error('这个 PIN 太容易猜，请换一组数字');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await pinHash(pin, salt);
+  await db.parentAuth.put({ key: 'pin', salt: bytesToBase64(salt), hash: bytesToBase64(hash), failedAttempts: 0 });
+}
+
+export async function verifyParentPin(pin: string): Promise<{ ok: boolean; lockedUntil?: string; attemptsRemaining?: number }> {
+  const record = await db.parentAuth.get('pin');
+  if (!record) return { ok: false };
+  if (record.lockedUntil && Date.parse(record.lockedUntil) > Date.now()) return { ok: false, lockedUntil: record.lockedUntil };
+  const candidate = await pinHash(pin, base64ToBytes(record.salt));
+  if (equalBytes(candidate, base64ToBytes(record.hash))) {
+    await db.parentAuth.put({ ...record, failedAttempts: 0, lockedUntil: undefined });
+    return { ok: true };
+  }
+  const failedAttempts = (record.lockedUntil ? 0 : record.failedAttempts) + 1;
+  const lockedUntil = failedAttempts >= MAX_PIN_ATTEMPTS ? new Date(Date.now() + PIN_LOCK_MS).toISOString() : undefined;
+  await db.parentAuth.put({ ...record, failedAttempts: lockedUntil ? 0 : failedAttempts, lockedUntil });
+  return { ok: false, lockedUntil, attemptsRemaining: lockedUntil ? 0 : MAX_PIN_ATTEMPTS - failedAttempts };
 }

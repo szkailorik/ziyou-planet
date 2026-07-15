@@ -2,6 +2,7 @@ export type Confidence = 'sure' | 'unsure' | 'teach-me';
 export type AttemptMode = 'self-check' | 'pronunciation-choice' | 'meaning-choice' | 'context-choice';
 export type AttemptResult = 'correct' | 'partial' | 'incorrect' | 'skipped';
 export type MasteryState = 'untested' | 'introduced' | 'forming' | 'basic' | 'stable' | 'due';
+export type AutomaticityState = 'insufficient' | 'effortful' | 'developing' | 'automatic';
 export type ChildAvatar = 'rocket' | 'planet' | 'star' | 'book';
 
 export type ChildProfile = {
@@ -26,6 +27,12 @@ export type CharacterEntry = {
   theme: string;
   scene: string;
   confusables: string[];
+  englishBridges: Array<{ zh: string; en: string }>;
+  characterFamily?: {
+    anchor: string;
+    members: string[];
+    note: string;
+  };
   contentStatus: 'basic' | 'reviewed';
 };
 
@@ -49,6 +56,10 @@ export type CharacterProgress = {
   attempts: number;
   correct: number;
   objectiveCorrect: number;
+  objectiveAttempts: number;
+  objectiveAccuracy: number;
+  medianCorrectLatencyMs?: number;
+  automaticity: AutomaticityState;
   distinctModes: number;
   distinctDays: number;
   nextReviewAt?: string;
@@ -59,6 +70,7 @@ export type AppSettings = {
   activeChildId: string;
   children: ChildProfile[];
   sound: boolean;
+  englishBridge: boolean;
   aiEnabled: false;
 };
 

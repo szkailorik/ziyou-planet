@@ -11,6 +11,12 @@ function nextReviewIso(lastSeen: string, step: number) {
   return new Date(new Date(lastSeen).getTime() + INTERVALS[Math.min(step, INTERVALS.length - 1)] * DAY).toISOString();
 }
 
+function median(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 export function progressFromAttempts(attempts: AttemptEvent[], now = new Date()): Map<number, CharacterProgress> {
   const grouped = new Map<number, AttemptEvent[]>();
   for (const attempt of attempts) {
@@ -25,6 +31,7 @@ export function progressFromAttempts(attempts: AttemptEvent[], now = new Date())
     let score = 0;
     let correct = 0;
     let objectiveCorrect = 0;
+    let objectiveAttempts = 0;
     let step = 0;
     const modes = new Set<string>();
     const days = new Set<string>();
@@ -40,6 +47,7 @@ export function progressFromAttempts(attempts: AttemptEvent[], now = new Date())
         if (event.confidence === 'unsure') score += 0.1;
         if (event.confidence === 'teach-me') score = Math.max(0, score - 0.2);
       } else if (event.result === 'correct') {
+        objectiveAttempts += 1;
         score += event.hintUsed ? 0.45 : 0.8;
         correct += 1;
         objectiveCorrect += 1;
@@ -48,10 +56,14 @@ export function progressFromAttempts(attempts: AttemptEvent[], now = new Date())
         if (event.mode === 'meaning-choice' || event.mode === 'context-choice') contextCorrect = true;
         if (!event.hintUsed && event.latencyMs <= 6000) step += 1;
       } else if (event.result === 'partial') {
+        objectiveAttempts += 1;
         score += 0.2;
       } else if (event.result === 'incorrect') {
+        objectiveAttempts += 1;
         score = Math.max(0, score - 0.65);
         step = 0;
+      } else {
+        objectiveAttempts += 1;
       }
     }
 
@@ -66,6 +78,18 @@ export function progressFromAttempts(attempts: AttemptEvent[], now = new Date())
     if (new Date(nextReviewAt) <= now && state !== 'introduced') state = 'due';
     if (score < 0.6 && events.length > 1) state = 'forming';
 
+    const recentCorrectLatencies = events
+      .filter((event) => event.mode !== 'self-check' && event.result === 'correct' && !event.hintUsed)
+      .slice(-5)
+      .map((event) => event.latencyMs);
+    const medianCorrectLatencyMs = recentCorrectLatencies.length ? Math.round(median(recentCorrectLatencies)) : undefined;
+    const objectiveAccuracy = objectiveAttempts ? objectiveCorrect / objectiveAttempts : 0;
+    let automaticity: CharacterProgress['automaticity'] = 'insufficient';
+    if (objectiveAttempts >= 2 && medianCorrectLatencyMs !== undefined) {
+      automaticity = objectiveAccuracy >= 0.7 && medianCorrectLatencyMs <= 6000 ? 'developing' : 'effortful';
+      if (objectiveAttempts >= 3 && objectiveAccuracy >= 0.8 && medianCorrectLatencyMs <= 3000 && objectiveCorrectDays.size >= 2 && contextCorrect) automaticity = 'automatic';
+    }
+
     result.set(characterId, {
       characterId,
       state,
@@ -73,6 +97,10 @@ export function progressFromAttempts(attempts: AttemptEvent[], now = new Date())
       attempts: events.length,
       correct,
       objectiveCorrect,
+      objectiveAttempts,
+      objectiveAccuracy: Math.round(objectiveAccuracy * 1000) / 1000,
+      medianCorrectLatencyMs,
+      automaticity,
       distinctModes: modes.size,
       distinctDays: days.size,
       nextReviewAt,

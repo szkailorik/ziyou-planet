@@ -14,6 +14,8 @@ type CharacterEntry = {
   example?: string;
   scene?: string;
   confusables?: string[];
+  englishBridges?: { zh: string; en: string }[];
+  characterFamily?: { anchor: string; members: string[]; note: string };
   sourceId: string;
   contentStatus: 'basic' | 'reviewed';
 };
@@ -80,6 +82,13 @@ type AttemptEvent = {
 - 基本掌握：至少两次客观题正确，累计证据分达到阈值。
 - 稳定掌握：至少两种题型正确，跨两个日期，且包含词境证据；首版快速扫描不会直接生成稳定掌握。
 - 到期未复测或后续错误：标记待复习，置信分下降。
+
+另外派生“识字自动化”指标，不把它混成一个模糊总分：
+
+- 客观正确率：所有非自报题中的正确比例。
+- 正确反应中位时间：最近 5 次该字无提示正确作答；全局报告最多看最近 100 次。
+- 自动化：至少 3 次客观作答、正确率不低于 80%、正确中位时间不高于 3 秒，同时具备跨日和词句语境证据。
+- 速度不能抵消错误；不同设备反应时只用于观察同一儿童趋势。
 
 ## 4. 复习调度
 

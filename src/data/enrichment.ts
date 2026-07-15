@@ -1,5 +1,7 @@
 import { CURRICULUM_CHARACTERS, CURRICULUM_PINYIN } from './curriculum-characters';
 import type { CharacterEntry } from '../types';
+import { ENGLISH_BRIDGES } from './english-bridges';
+import { CHARACTER_FAMILY_BY_CHAR } from './character-families';
 
 type Enrichment = Pick<CharacterEntry, 'words' | 'example' | 'scene' | 'confusables'>;
 
@@ -123,6 +125,8 @@ export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex
     theme: themes.find((item) => item.chars.includes(char))?.name ?? '课程常用字',
     scene: curated?.scene ?? '课程阅读与日常书面语中会见到',
     confusables: curated?.confusables ?? [],
+    englishBridges: ENGLISH_BRIDGES[char] ?? [],
+    characterFamily: CHARACTER_FAMILY_BY_CHAR.get(char),
     contentStatus: curated ? 'reviewed' : 'basic'
   };
 });

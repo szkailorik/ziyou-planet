@@ -44,4 +44,26 @@ describe('mastery rules', () => {
     const progress = progressFromAttempts(attempts, new Date('2026-07-01T09:01:00.000Z')).get(1)!;
     expect(progress.score).toBeLessThan(0.8);
   });
+
+  it('does not call fast but inaccurate recognition automatic', () => {
+    const attempts: AttemptEvent[] = [
+      { ...base, id: '2', mode: 'pronunciation-choice', result: 'correct', latencyMs: 700 },
+      { ...base, id: '3', mode: 'meaning-choice', result: 'incorrect', latencyMs: 500, occurredAt: '2026-07-02T08:00:00.000Z' },
+      { ...base, id: '4', mode: 'context-choice', result: 'incorrect', latencyMs: 600, occurredAt: '2026-07-03T08:00:00.000Z' }
+    ];
+    const progress = progressFromAttempts(attempts, new Date('2026-07-03T08:01:00.000Z')).get(1)!;
+    expect(progress.objectiveAccuracy).toBeCloseTo(1 / 3, 2);
+    expect(progress.automaticity).toBe('effortful');
+  });
+
+  it('requires cross-day context evidence for automatic recognition', () => {
+    const sameDay: AttemptEvent[] = [
+      { ...base, id: '2', mode: 'pronunciation-choice', result: 'correct', latencyMs: 1200 },
+      { ...base, id: '3', mode: 'meaning-choice', result: 'correct', latencyMs: 1400, occurredAt: '2026-07-01T08:02:00.000Z' },
+      { ...base, id: '4', mode: 'context-choice', result: 'correct', latencyMs: 1500, occurredAt: '2026-07-01T08:03:00.000Z' }
+    ];
+    expect(progressFromAttempts(sameDay, new Date('2026-07-01T08:04:00.000Z')).get(1)!.automaticity).toBe('developing');
+    sameDay[2] = { ...sameDay[2], occurredAt: '2026-07-02T08:03:00.000Z' };
+    expect(progressFromAttempts(sameDay, new Date('2026-07-02T08:04:00.000Z')).get(1)!.automaticity).toBe('automatic');
+  });
 });

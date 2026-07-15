@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
-import { clearAllData, db, exportBackup, importBackup, loadSettings, loadSyncMeta, replaceFromCloud, saveSettings } from './db';
+import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
 import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
 import { createCloudFamily, getCloudStatus, joinCloudFamily, leaveCloudFamily, regenerateSyncCode, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
 type View = 'home' | 'scan' | 'review' | 'library' | 'report';
 type ScanSession = { ids: number[]; index: number; size: number; startedAt: string };
-type ChildSession = { childId: string; nickname: string; dailyMinutes: 5 | 10 | 15; sound: boolean };
+type ChildSession = { childId: string; nickname: string; dailyMinutes: 5 | 10 | 15; sound: boolean; englishBridge: boolean };
 type CloudUiState = { status: 'checking' | 'disconnected' | 'syncing' | 'connected' | 'error'; lastSyncAt?: string; message?: string };
 type CloudActions = {
   create: (pin: string) => Promise<string>;
@@ -71,15 +71,17 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   const [parentUnlocked, setParentUnlocked] = useState(false);
+  const [parentPinConfigured, setParentPinConfigured] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [cloud, setCloud] = useState<CloudUiState>({ status: 'checking' });
   const syncInFlight = useRef(false);
   const lastAutoSyncKey = useRef('');
 
   useEffect(() => {
-    Promise.all([loadSettings(), db.attempts.toArray()]).then(([storedSettings, storedAttempts]) => {
+    Promise.all([loadSettings(), db.attempts.toArray(), hasParentPin()]).then(([storedSettings, storedAttempts, pinConfigured]) => {
       setSettings(storedSettings);
       setAttempts(storedAttempts);
+      setParentPinConfigured(pinConfigured);
       setLoading(false);
       navigator.storage?.persist?.().catch(() => undefined);
       getCloudStatus().then((status) => {
@@ -118,7 +120,8 @@ export default function App() {
     childId: activeChild.id,
     nickname: activeChild.nickname,
     dailyMinutes: activeChild.dailyMinutes,
-    sound: settings.sound
+    sound: settings.sound,
+    englishBridge: settings.englishBridge
   } : null, [activeChild, settings]);
   const childAttempts = useMemo(() => activeChild ? attempts.filter((item) => item.childId === activeChild.id) : [], [attempts, activeChild]);
   const progress = useMemo(() => progressFromAttempts(childAttempts), [childAttempts]);
@@ -148,7 +151,8 @@ export default function App() {
 
   async function applyCloudSnapshot(snapshot: CloudSnapshot) {
     await replaceFromCloud(snapshot.backup, snapshot.settingsUpdatedAt, snapshot.syncedAt);
-    setSettings((current) => JSON.stringify(current) === JSON.stringify(snapshot.backup.settings) ? current : snapshot.backup.settings);
+    const normalizedSettings = migrateSettings(snapshot.backup.settings);
+    setSettings((current) => JSON.stringify(current) === JSON.stringify(normalizedSettings) ? current : normalizedSettings);
     setAttempts((current) => {
       if (current.length === snapshot.backup.attempts.length) {
         const ids = new Set(current.map((item) => item.id));
@@ -255,11 +259,11 @@ export default function App() {
         {view === 'home' && <Home settings={childSettings} stats={stats} progress={progress} onNavigate={navigate} />}
         {view === 'scan' && <Scan settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} onFinish={() => { setToast(`${activeChild.nickname} 的扫描已保存`); navigate('home'); }} />}
         {view === 'review' && <Review settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} />}
-        {view === 'library' && <Library progress={progress} />}
+        {view === 'library' && <Library progress={progress} showEnglish={settings.englishBridge} />}
         {view === 'report' && (
           parentUnlocked
-            ? <Report settings={settings} activeChild={activeChild} setSettings={async (next) => { setSettings(next); await saveSettings(next); }} attempts={childAttempts} setAttempts={setAttempts} progress={progress} stats={stats} setToast={setToast} lock={() => setParentUnlocked(false)} cloud={cloud} cloudActions={cloudActions} />
-            : <ParentGate unlock={() => setParentUnlocked(true)} back={() => navigate('home')} />
+            ? <Report settings={settings} activeChild={activeChild} setSettings={async (next) => { setSettings(next); await saveSettings(next); }} attempts={childAttempts} setAttempts={setAttempts} progress={progress} stats={stats} setToast={setToast} lock={() => setParentUnlocked(false)} onDataCleared={() => { setParentPinConfigured(false); setParentUnlocked(false); }} cloud={cloud} cloudActions={cloudActions} />
+            : <ParentGate configured={parentPinConfigured} unlock={() => setParentUnlocked(true)} back={() => navigate('home')} setup={async (pin) => { await setParentPin(pin); setParentPinConfigured(true); setParentUnlocked(true); }} verify={verifyParentPin} />
         )}
       </main>
 
@@ -437,13 +441,16 @@ function ScanOption({ size, title, text, recommended, onClick }: { size: number;
   return <button className="scan-option" onClick={onClick}>{recommended && <b>推荐第一次</b>}<strong>{size}<small>字</small></strong><span>{title}</span><p>{text}</p><i>开始 →</i></button>;
 }
 
-function ContextBridge({ entry, compact = false }: { entry: CharacterEntry; compact?: boolean }) {
+function ContextBridge({ entry, compact = false, showEnglish = false }: { entry: CharacterEntry; compact?: boolean; showEnglish?: boolean }) {
   const line = entry.classicLine ?? entry.example;
-  return <div className={compact ? 'context-bridge context-bridge--compact' : 'context-bridge'} aria-label="从字到词再到句"><div className="context-step"><small>字</small><strong>{entry.char}</strong></div><span aria-hidden="true">→</span><div className="context-step context-step--words"><small>词</small><p>{entry.words.length ? entry.words.map((word) => <b key={word}>{word}</b>) : <em>词语审核中</em>}</p></div><span aria-hidden="true">→</span><div className="context-step context-step--line"><small>{entry.classicLine ? '经典句' : '生活句'}</small><p>{line}</p>{entry.classicSource && <cite>{entry.classicSource}</cite>}</div></div>;
+  return <><div className={compact ? 'context-bridge context-bridge--compact' : 'context-bridge'} aria-label="从字到词再到句"><div className="context-step"><small>字</small><strong>{entry.char}</strong></div><span aria-hidden="true">→</span><div className="context-step context-step--words"><small>词</small><p>{entry.words.length ? entry.words.map((word) => <b key={word}>{word}</b>) : <em>词语审核中</em>}</p></div><span aria-hidden="true">→</span><div className="context-step context-step--line"><small>{entry.classicLine ? '经典句' : '生活句'}</small><p>{line}</p>{entry.classicSource && <cite>{entry.classicSource}</cite>}</div></div>
+    {showEnglish && entry.englishBridges.length > 0 && <div className="english-bridge"><span>EN</span><div><small>答后语义桥 · 不参与中文评分</small><p>{entry.englishBridges.map((bridge) => <b key={`${bridge.zh}-${bridge.en}`}>{bridge.zh} <i>→</i> {bridge.en}</b>)}</p></div></div>}
+    {entry.characterFamily && <div className="family-bridge"><span>字族</span><div><small>结构迁移 · 不是读音答案</small><p>{entry.characterFamily.members.map((char) => <b className={char === entry.char ? 'current' : ''} key={char}>{char}</b>)}</p><em>{entry.characterFamily.note}</em></div></div>}
+  </>;
 }
 
 function Feedback({ entry, confidence, settings }: { entry: CharacterEntry; confidence: Confidence; settings: ChildSession }) {
-  return <div className="feedback-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : confidence === 'unsure' ? '认真地说“不确定”也很棒' : '现在一起认识它'}</span><h2>{entry.pinyin}</h2></div><button className="sound-button" title="使用设备自带中文语音，音色与多音字效果可能因设备而异" onClick={() => speak(entry.char, settings.sound)} aria-label={`用设备语音播放${entry.char}`}>♪ 点读</button></div><ContextBridge entry={entry} /><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div><p className="evidence-note">先单字回想，答后连接词和句；换题型、换语境、隔天还能认出，才会成为“稳定掌握”。</p></div>;
+  return <div className="feedback-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : confidence === 'unsure' ? '认真地说“不确定”也很棒' : '现在一起认识它'}</span><h2>{entry.pinyin}</h2></div><button className="sound-button" title="使用设备自带中文语音，音色与多音字效果可能因设备而异" onClick={() => speak(entry.char, settings.sound)} aria-label={`用设备语音播放${entry.char}`}>♪ 点读</button></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} /><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div><p className="evidence-note">先单字回想，答后连接词和句；换题型、换语境、隔天还能认出，才会成为“稳定掌握”。</p></div>;
 }
 
 function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { settings: ChildSession; attempts: AttemptEvent[]; progress: ReturnType<typeof progressFromAttempts>; addAttempt: (event: AttemptEvent) => Promise<void>; onFocusChange: (active: boolean) => void }) {
@@ -499,7 +506,7 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
     started.current = Date.now();
   }
 
-  return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">选出这个字的读音</span></div><div className="quiz-card"><CharacterGlyph entry={entry} small /><div className="pinyin-choices">{choices.map((value) => <button disabled={answered} aria-label={answered && value === entry.pinyin ? `${value}，正确答案` : value} key={value} className={answered ? value === entry.pinyin ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === entry.pinyin ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? '答对了！' : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button><button className="primary-button" onClick={next}>下一题 →</button></div>}</div></div>;
+    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">选出这个字的读音</span></div><div className="quiz-card"><CharacterGlyph entry={entry} small /><div className="pinyin-choices">{choices.map((value) => <button disabled={answered} aria-label={answered && value === entry.pinyin ? `${value}，正确答案` : value} key={value} className={answered ? value === entry.pinyin ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === entry.pinyin ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? '答对了！' : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button><button className="primary-button" onClick={next}>下一题 →</button></div>}</div></div>;
 }
 
 function makePinyinChoices(entry: CharacterEntry) {
@@ -512,7 +519,7 @@ function makePinyinChoices(entry: CharacterEntry) {
   return candidates.map((value) => ({ value, sort: value === entry.pinyin ? (entry.id % 4) : ((entry.id + value.codePointAt(0)!) % 7) })).sort((a, b) => a.sort - b.sort).map((item) => item.value);
 }
 
-function Library({ progress }: { progress: ReturnType<typeof progressFromAttempts> }) {
+function Library({ progress, showEnglish }: { progress: ReturnType<typeof progressFromAttempts>; showEnglish: boolean }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'list1' | 'list2' | 'learned'>('all');
   const [visible, setVisible] = useState(180);
@@ -526,30 +533,64 @@ function Library({ progress }: { progress: ReturnType<typeof progressFromAttempt
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [selected]);
   const matches = useMemo(() => CHARACTERS.filter((entry) => {
-    const queryMatch = !query || entry.char.includes(query) || entry.pinyin.toLowerCase().includes(query.toLowerCase()) || entry.words.some((word) => word.includes(query));
+    const queryMatch = !query || entry.char.includes(query) || entry.pinyin.toLowerCase().includes(query.toLowerCase()) || entry.words.some((word) => word.includes(query)) || (showEnglish && entry.englishBridges.some((bridge) => bridge.en.toLowerCase().includes(query.toLowerCase())));
     const filterMatch = filter === 'all' || (filter === 'list1' && entry.curriculumList === 1) || (filter === 'list2' && entry.curriculumList === 2) || (filter === 'learned' && progress.has(entry.id));
     return queryMatch && filterMatch;
-  }), [query, filter, progress]);
+  }), [query, filter, progress, showEnglish]);
   return <div className="page library-page"><PageIntro eyebrow="我的字册" title="3500 个课程常用字，都在这里" text="前 2500 个为课标字表一，后 1000 个为字表二。产品路线和掌握状态不是官方年级字表。" />
     <div className="library-toolbar"><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="搜索汉字、拼音或词语提示" value={query} onChange={(event) => { setQuery(event.target.value); setVisible(180); }} placeholder="搜索汉字、拼音或词语提示" /></label><div className="filter-pills">{([['all', '全部 3500'], ['list1', '字表一 2500'], ['list2', '字表二 1000'], ['learned', '已有记录']] as const).map(([value, label]) => <button aria-pressed={filter === value} key={value} className={filter === value ? 'active' : ''} onClick={() => { setFilter(value); setVisible(180); }}>{label}</button>)}</div></div>
     <div className="library-summary"><span>找到 <b>{matches.length}</b> 个字</span><span><i className="dot dot--stable" />稳定掌握 <i className="dot dot--forming" />正在形成 <i className="dot" />未测</span></div>
     <div className="character-grid">{matches.slice(0, visible).map((entry) => { const item = progress.get(entry.id); return <button type="button" onClick={() => setSelected(entry)} aria-label={`${entry.char}，${entry.pinyin}，${item ? STATE_LABEL[item.state] : '未测'}`} className={`character-tile tile--${item?.state ?? 'untested'}`} key={entry.id}><div><strong>{entry.char}</strong><span>{entry.pinyin}</span></div><small>{item ? STATE_LABEL[item.state] : `字表${entry.curriculumList === 1 ? '一' : '二'}`}</small>{entry.contentStatus === 'reviewed' && <b title="词语与场景已审核">✓</b>}</button>; })}</div>
     {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 180)}>再显示 180 个</button>}
-    {selected && <div className="character-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><section className="character-dialog" role="dialog" aria-modal="true" aria-labelledby="character-dialog-title" onClick={(event) => event.stopPropagation()}><button className="dialog-close" aria-label="关闭字详情" onClick={() => setSelected(null)}>×</button><div className="dialog-glyph">{selected.char}</div><div><span className="eyebrow">{selected.theme} · 课标字表{selected.curriculumList === 1 ? '一' : '二'} · {selected.contentStatus === 'reviewed' ? '内容已审核' : '基础条目'}</span><h2 id="character-dialog-title">{selected.char} <small>{selected.pinyin}</small></h2><ContextBridge entry={selected} compact /><p><strong>生活线索：</strong>{selected.scene}</p><p><strong>学习状态：</strong>{progress.get(selected.id) ? STATE_LABEL[progress.get(selected.id)!.state] : '未测'}</p><p className="source-note">公版古诗文会注明作者与篇名；教材原句须按版本和授权另行维护。基础条目的拼音只作检索提示，不进入客观读音判分。</p></div></section></div>}
+    {selected && <div className="character-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><section className="character-dialog" role="dialog" aria-modal="true" aria-labelledby="character-dialog-title" onClick={(event) => event.stopPropagation()}><button className="dialog-close" aria-label="关闭字详情" onClick={() => setSelected(null)}>×</button><div className="dialog-glyph">{selected.char}</div><div><span className="eyebrow">{selected.theme} · 课标字表{selected.curriculumList === 1 ? '一' : '二'} · {selected.contentStatus === 'reviewed' ? '内容已审核' : '基础条目'}</span><h2 id="character-dialog-title">{selected.char} <small>{selected.pinyin}</small></h2><ContextBridge entry={selected} compact showEnglish={showEnglish} /><p><strong>生活线索：</strong>{selected.scene}</p><p><strong>学习状态：</strong>{progress.get(selected.id) ? STATE_LABEL[progress.get(selected.id)!.state] : '未测'}</p><p className="source-note">公版古诗文会注明作者与篇名；教材原句须按版本和授权另行维护。基础条目的拼音只作检索提示，不进入客观读音判分。</p></div></section></div>}
   </div>;
 }
 
-function ParentGate({ unlock, back }: { unlock: () => void; back: () => void }) {
-  const [answer, setAnswer] = useState('');
-  const [error, setError] = useState(false);
-  return <div className="page gate-page"><div className="gate-card"><div className="gate-icon">◒</div><span className="eyebrow">家长中心</span><h1>请家长来完成一个小问题</h1><p>儿童学习时不需要看到复杂统计、设置和数据操作。</p><label>3 + 4 = <input inputMode="numeric" value={answer} onChange={(event) => { setAnswer(event.target.value); setError(false); }} autoFocus /></label>{error && <small role="alert">再算一算，是一个一位数。</small>}<button className="primary-button" onClick={() => answer.trim() === '7' ? unlock() : setError(true)}>进入家长中心</button><button className="text-button" onClick={back}>返回儿童模式</button></div></div>;
+function ParentGate({ configured, unlock, back, setup, verify }: { configured: boolean; unlock: () => void; back: () => void; setup: (pin: string) => Promise<void>; verify: (pin: string) => Promise<{ ok: boolean; lockedUntil?: string; attemptsRemaining?: number }> }) {
+  const [pin, setPin] = useState('');
+  const [pinAgain, setPinAgain] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [lockedUntil, setLockedUntil] = useState('');
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    if (!lockedUntil || Date.parse(lockedUntil) <= Date.now()) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [lockedUntil]);
+  const lockedSeconds = lockedUntil ? Math.max(0, Math.ceil((Date.parse(lockedUntil) - clock) / 1000)) : 0;
+  async function submit() {
+    setError(''); setBusy(true);
+    try {
+      if (pin.length !== 6) throw new Error('请输入 6 位数字 PIN');
+      if (!configured) {
+        if (pin !== pinAgain) throw new Error('两次 PIN 不一致');
+        await setup(pin);
+        return;
+      }
+      const result = await verify(pin);
+      if (result.ok) return unlock();
+      if (result.lockedUntil) {
+        setLockedUntil(result.lockedUntil); setClock(Date.now());
+        throw new Error('错误次数过多，家长入口已暂时锁定');
+      }
+      throw new Error(`PIN 不正确${result.attemptsRemaining !== undefined ? `，还可尝试 ${result.attemptsRemaining} 次` : ''}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '无法验证 PIN');
+    } finally { setBusy(false); }
+  }
+  return <div className="page gate-page"><form className="gate-card" onSubmit={(event) => { event.preventDefault(); void submit(); }}><div className="gate-icon">◒</div><span className="eyebrow">家长中心</span><h1>{configured ? '输入家长 PIN' : '先设置家长 PIN'}</h1><p>{configured ? '报告、家庭档案和数据操作只对家长开放。' : '用 6 位数字保护报告和数据操作；请避开生日、连续数字和重复数字。'}</p><label className="pin-label">{configured ? '家长 PIN' : '设置 PIN'}<input inputMode="numeric" autoComplete={configured ? 'current-password' : 'new-password'} maxLength={6} value={pin} onChange={(event) => { setPin(event.target.value.replace(/\D/g, '')); setError(''); }} autoFocus placeholder="••••••" /></label>{!configured && <label className="pin-label">再次输入<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pinAgain} onChange={(event) => { setPinAgain(event.target.value.replace(/\D/g, '')); setError(''); }} placeholder="••••••" /></label>}{error && <small role="alert">{lockedSeconds ? `${error}（${lockedSeconds} 秒）` : error}</small>}<button type="submit" className="primary-button" disabled={busy || lockedSeconds > 0}>{busy ? '正在验证…' : configured ? '进入家长中心' : '设置并进入'}</button><button type="button" className="text-button" onClick={back}>返回儿童模式</button></form></div>;
 }
 
-function Report({ settings, activeChild, setSettings, attempts, setAttempts, progress, stats, setToast, lock, cloud, cloudActions }: { settings: AppSettings; activeChild: ChildProfile; setSettings: (settings: AppSettings) => Promise<void>; attempts: AttemptEvent[]; setAttempts: (attempts: AttemptEvent[]) => void; progress: ReturnType<typeof progressFromAttempts>; stats: ReturnType<typeof statsShape>; setToast: (text: string) => void; lock: () => void; cloud: CloudUiState; cloudActions: CloudActions }) {
+function Report({ settings, activeChild, setSettings, attempts, setAttempts, progress, stats, setToast, lock, onDataCleared, cloud, cloudActions }: { settings: AppSettings; activeChild: ChildProfile; setSettings: (settings: AppSettings) => Promise<void>; attempts: AttemptEvent[]; setAttempts: (attempts: AttemptEvent[]) => void; progress: ReturnType<typeof progressFromAttempts>; stats: ReturnType<typeof statsShape>; setToast: (text: string) => void; lock: () => void; onDataCleared: () => void; cloud: CloudUiState; cloudActions: CloudActions }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uniqueList1 = [...progress.keys()].filter((id) => (CHARACTER_BY_ID.get(id)?.curriculumList ?? 2) === 1).length;
   const objective = attempts.filter((item) => item.mode !== 'self-check');
   const objectiveCorrect = objective.filter((item) => item.result === 'correct').length;
+  const correctLatencies = objective.filter((item) => item.result === 'correct' && !item.hintUsed).slice(-100).map((item) => item.latencyMs).sort((a, b) => a - b);
+  const medianLatency = correctLatencies.length ? Math.round(correctLatencies.length % 2 ? correctLatencies[Math.floor(correctLatencies.length / 2)] : (correctLatencies[correctLatencies.length / 2 - 1] + correctLatencies[correctLatencies.length / 2]) / 2) : undefined;
+  const automaticCount = [...progress.values()].filter((item) => item.automaticity === 'automatic').length;
+  const developingCount = [...progress.values()].filter((item) => item.automaticity === 'developing').length;
   const reliability = objective.length >= 20 ? '正在校准' : objective.length ? '证据较少' : '仅有熟悉度扫描';
 
   async function updateChild(childId: string, patch: Partial<Pick<ChildProfile, 'nickname' | 'dailyMinutes' | 'avatar'>>) {
@@ -590,7 +631,7 @@ function Report({ settings, activeChild, setSettings, attempts, setAttempts, pro
       const payload = JSON.parse(await file.text()) as BackupPayload;
       await importBackup(payload);
       setAttempts(await db.attempts.toArray());
-      await setSettings(payload.settings);
+      await setSettings(await loadSettings());
       setToast('备份已恢复');
     } catch (error) {
       setToast(error instanceof Error ? error.message : '无法读取备份');
@@ -608,16 +649,18 @@ function Report({ settings, activeChild, setSettings, attempts, setAttempts, pro
     setAttempts([]);
     await setSettings(fresh);
     setToast('本地学习记录已清除');
+    onDataCleared();
   }
 
   return <div className="page report-page"><div className="report-title"><div><span className="eyebrow">家长中心 · 当前档案</span><h1>{activeChild.nickname} 的学习报告</h1><p>每个孩子的扫描、复习队列和掌握证据完全分开。</p></div><button className="quiet-button" onClick={lock}>锁定家长中心</button></div>
     <section className="report-hero"><div><span className="report-label">当前可确认的稳定掌握</span><strong>{stats.stable}<small> 字</small></strong><p>已扫描 {stats.scanned} 字 · 基本掌握 {stats.basic} 字</p></div><div className="reliability"><span>结论可靠度</span><strong>{reliability}</strong><p>{objective.length ? `已有 ${objective.length} 次客观复核，正确 ${objectiveCorrect} 次。` : '目前只有主观熟悉度记录，不能据此给出精确识字量。'}</p></div></section>
     <section className="metric-grid"><Metric icon="✓" tone="green" label="我会读（自报）" value={stats.sure} note="等待客观复核" /><Metric icon="~" tone="yellow" label="我不确定" value={stats.unsure} note="优先短期复习" /><Metric icon="✦" tone="red" label="请教教我" value={stats.teach} note="进入学习队列" /><Metric icon="↻" tone="purple" label="现在到期" value={stats.due} note="建议今天再见面" /></section>
+    <section className="efficiency-panel"><div><span className="eyebrow">识字自动化效率</span><h2>准确、稳定，再看速度</h2><p>系统静默记录作答时间，不显示倒计时、不做同龄排名；速度不能抵消错误。</p></div><div className="efficiency-metrics"><div><small>客观正确率</small><strong>{objective.length ? `${Math.round(objectiveCorrect / objective.length * 100)}%` : '—'}</strong><span>{objectiveCorrect} / {objective.length} 次</span></div><div><small>正确作答中位数</small><strong>{medianLatency === undefined ? '—' : medianLatency < 1000 ? '<1秒' : `${(medianLatency / 1000).toFixed(1)}秒`}</strong><span>最近 100 次无提示正确</span></div><div><small>自动化识字</small><strong>{automaticCount} 字</strong><span>另有 {developingCount} 字正在提速</span></div></div><p className="source-note">“自动化”需客观正确率 ≥80%、正确中位时间 ≤3 秒，并有跨日和词句语境证据；不同设备的毫秒值仅看个人趋势。</p></section>
     <div className="report-columns"><section className="panel"><div className="panel-title"><h2>课程层级覆盖</h2><span>不是同龄排名</span></div><Coverage label="课标字表一" detail={`${uniqueList1} / 2500 已有记录`} value={uniqueList1 / 2500} tone="purple" /><Coverage label="课标字表二" detail={`${stats.scanned - uniqueList1} / 1000 已有记录`} value={(stats.scanned - uniqueList1) / 1000} tone="orange" /><Coverage label="小学约 3000 字目标" detail={`${stats.stable} 字达到稳定证据`} value={stats.stable / 3000} tone="green" /><p className="source-note">“已有记录”不等于“已掌握”；稳定掌握需要客观题与跨日证据。</p></section>
       <section className="panel"><div className="panel-title"><h2>下一步建议</h2><span>确定性规则生成</span></div><div className="advice-list"><div><span>01</span><p><strong>{stats.due ? `先复习 ${stats.due} 个到期字` : '完成第一轮客观复核'}</strong><small>每次 3-5 分钟，不用一次做完。</small></p></div><div><span>02</span><p><strong>优先处理“不确定”和“请教我”</strong><small>看读音、词语，再在另一题型中主动回忆。</small></p></div><div><span>03</span><p><strong>不要只追求扫描总量</strong><small>能在新词和隔天复测中认出，才是真正变稳。</small></p></div></div></section></div>
     <section className="profiles-panel"><div className="panel-title"><div><span className="eyebrow">家庭档案</span><h2>Kai、Lorik 和其他孩子</h2></div><button className="secondary-button" onClick={() => void addChild()}>＋ 添加档案</button></div><div className="profile-editor-grid">{settings.children.map((child) => <article className={child.id === settings.activeChildId ? 'profile-editor profile-editor--active' : 'profile-editor'} key={child.id}><button className="profile-select" onClick={() => void setSettings({ ...settings, activeChildId: child.id })} aria-pressed={child.id === settings.activeChildId}><span>{AVATAR_ICON[child.avatar]}</span><strong>{child.id === settings.activeChildId ? '当前学习' : '切换到此档案'}</strong></button><label>昵称<input value={child.nickname} onChange={(event) => void updateChild(child.id, { nickname: event.target.value.slice(0, 12) || '孩子' })} /></label><label>每日时长<select value={child.dailyMinutes} onChange={(event) => void updateChild(child.id, { dailyMinutes: Number(event.target.value) as 5 | 10 | 15 })}><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15">15 分钟</option></select></label><button className="profile-delete" disabled={settings.children.length <= 1} onClick={() => void removeChild(child.id)}>删除档案</button></article>)}</div></section>
     <CloudSyncPanel cloud={cloud} actions={cloudActions} />
-    <section className="settings-panel"><div><h2>本机设置与数据</h2><p>本地始终保留可离线使用的数据；导出备份仍可作为独立恢复手段。</p></div><label className="switch-label"><input type="checkbox" checked={settings.sound} onChange={(event) => void setSettings({ ...settings, sound: event.target.checked })} />启用设备点读声音</label><div className="data-actions"><button onClick={() => void handleExport()}>导出全家备份</button><button onClick={() => inputRef.current?.click()}>恢复全家备份</button><button className="danger-button" onClick={() => void handleClear()}>删除本机数据</button><input ref={inputRef} hidden type="file" accept="application/json" onChange={(event) => void handleImport(event)} /></div></section>
+    <section className="settings-panel"><div><h2>本机设置与数据</h2><p>本地始终保留可离线使用的数据；英文只在中文作答后显示，不进入中文掌握度。</p></div><div className="setting-switches"><label className="switch-label"><input type="checkbox" checked={settings.sound} onChange={(event) => void setSettings({ ...settings, sound: event.target.checked })} />启用设备点读声音</label><label className="switch-label"><input type="checkbox" checked={settings.englishBridge} onChange={(event) => void setSettings({ ...settings, englishBridge: event.target.checked })} />答后显示英文语义桥</label></div><div className="data-actions"><button onClick={() => void handleExport()}>导出全家备份</button><button onClick={() => inputRef.current?.click()}>恢复全家备份</button><button className="danger-button" onClick={() => void handleClear()}>删除本机数据</button><input ref={inputRef} hidden type="file" accept="application/json" onChange={(event) => void handleImport(event)} /></div></section>
   </div>;
 }
 
