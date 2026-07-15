@@ -442,11 +442,20 @@ function ScanOption({ size, title, text, recommended, onClick }: { size: number;
 }
 
 function ContextBridge({ entry, compact = false, showEnglish = false }: { entry: CharacterEntry; compact?: boolean; showEnglish?: boolean }) {
-  const line = entry.classicLine ?? entry.example;
-  return <><div className={compact ? 'context-bridge context-bridge--compact' : 'context-bridge'} aria-label="从字到词再到句"><div className="context-step"><small>字</small><strong>{entry.char}</strong></div><span aria-hidden="true">→</span><div className="context-step context-step--words"><small>词</small><p>{entry.words.length ? entry.words.map((word) => <b key={word}>{word}</b>) : <em>词语审核中</em>}</p></div><span aria-hidden="true">→</span><div className="context-step context-step--line"><small>{entry.classicLine ? '经典句' : '生活句'}</small><p>{line}</p>{entry.classicSource && <cite>{entry.classicSource}</cite>}</div></div>
+  return <><div className={compact ? 'context-bridge context-bridge--compact' : 'context-bridge'} aria-label="从字到词再到生活句"><div className="context-step"><small>字</small><strong>{entry.char}</strong></div><span aria-hidden="true">→</span><div className="context-step context-step--words"><small>词</small><p>{entry.words.length ? entry.words.map((word) => <b key={word}>{word}</b>) : <em>词语审核中</em>}</p></div><span aria-hidden="true">→</span><div className="context-step context-step--line"><small>生活句</small><p>{entry.example}</p></div></div>
     {showEnglish && entry.englishBridges.length > 0 && <div className="english-bridge"><span>EN</span><div><small>答后语义桥 · 不参与中文评分</small><p>{entry.englishBridges.map((bridge) => <b key={`${bridge.zh}-${bridge.en}`}>{bridge.zh} <i>→</i> {bridge.en}</b>)}</p></div></div>}
     {entry.characterFamily && <div className="family-bridge"><span>字族</span><div><small>结构迁移 · 不是读音答案</small><p>{entry.characterFamily.members.map((char) => <b className={char === entry.char ? 'current' : ''} key={char}>{char}</b>)}</p><em>{entry.characterFamily.note}</em></div></div>}
+    <CulturalBridge entry={entry} />
   </>;
+}
+
+function CulturalBridge({ entry }: { entry: CharacterEntry }) {
+  if (!entry.idiom && !entry.classic) return null;
+  const labels = [entry.idiom && '成语', entry.classic && '古诗名句'].filter(Boolean).join(' + ');
+  return <details className="cultural-bridge"><summary><span>文化彩蛋</span><div><strong>{labels}</strong><small>答后选看 · 不计分、不要求背诵</small></div><i aria-hidden="true">＋</i></summary><div className="cultural-content">
+    {entry.idiom && <article className="culture-item culture-item--idiom"><span>成语</span><div><h3>{entry.idiom.text}</h3><p>{entry.idiom.meaning}</p><small>怎么用：{entry.idiom.example}</small></div></article>}
+    {entry.classic && <article className="culture-item culture-item--classic"><span>名句</span><div><blockquote>{entry.classic.line}</blockquote><cite>{entry.classic.dynasty} · {entry.classic.author}《{entry.classic.title}》</cite><p>{entry.classic.note}</p></div></article>}
+  </div></details>;
 }
 
 function Feedback({ entry, confidence, settings }: { entry: CharacterEntry; confidence: Confidence; settings: ChildSession }) {
@@ -533,12 +542,12 @@ function Library({ progress, showEnglish }: { progress: ReturnType<typeof progre
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [selected]);
   const matches = useMemo(() => CHARACTERS.filter((entry) => {
-    const queryMatch = !query || entry.char.includes(query) || entry.pinyin.toLowerCase().includes(query.toLowerCase()) || entry.words.some((word) => word.includes(query)) || (showEnglish && entry.englishBridges.some((bridge) => bridge.en.toLowerCase().includes(query.toLowerCase())));
+    const queryMatch = !query || entry.char.includes(query) || entry.pinyin.toLowerCase().includes(query.toLowerCase()) || entry.words.some((word) => word.includes(query)) || entry.idiom?.text.includes(query) || entry.classic?.line.includes(query) || entry.classic?.title.includes(query) || entry.classic?.author.includes(query) || (showEnglish && entry.englishBridges.some((bridge) => bridge.en.toLowerCase().includes(query.toLowerCase())));
     const filterMatch = filter === 'all' || (filter === 'list1' && entry.curriculumList === 1) || (filter === 'list2' && entry.curriculumList === 2) || (filter === 'learned' && progress.has(entry.id));
     return queryMatch && filterMatch;
   }), [query, filter, progress, showEnglish]);
   return <div className="page library-page"><PageIntro eyebrow="我的字册" title="3500 个课程常用字，都在这里" text="前 2500 个为课标字表一，后 1000 个为字表二。产品路线和掌握状态不是官方年级字表。" />
-    <div className="library-toolbar"><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="搜索汉字、拼音或词语提示" value={query} onChange={(event) => { setQuery(event.target.value); setVisible(180); }} placeholder="搜索汉字、拼音或词语提示" /></label><div className="filter-pills">{([['all', '全部 3500'], ['list1', '字表一 2500'], ['list2', '字表二 1000'], ['learned', '已有记录']] as const).map(([value, label]) => <button aria-pressed={filter === value} key={value} className={filter === value ? 'active' : ''} onClick={() => { setFilter(value); setVisible(180); }}>{label}</button>)}</div></div>
+    <div className="library-toolbar"><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="搜索汉字、拼音、词语、成语或古诗" value={query} onChange={(event) => { setQuery(event.target.value); setVisible(180); }} placeholder="搜索汉字、拼音、词语、成语或古诗" /></label><div className="filter-pills">{([['all', '全部 3500'], ['list1', '字表一 2500'], ['list2', '字表二 1000'], ['learned', '已有记录']] as const).map(([value, label]) => <button aria-pressed={filter === value} key={value} className={filter === value ? 'active' : ''} onClick={() => { setFilter(value); setVisible(180); }}>{label}</button>)}</div></div>
     <div className="library-summary"><span>找到 <b>{matches.length}</b> 个字</span><span><i className="dot dot--stable" />稳定掌握 <i className="dot dot--forming" />正在形成 <i className="dot" />未测</span></div>
     <div className="character-grid">{matches.slice(0, visible).map((entry) => { const item = progress.get(entry.id); return <button type="button" onClick={() => setSelected(entry)} aria-label={`${entry.char}，${entry.pinyin}，${item ? STATE_LABEL[item.state] : '未测'}`} className={`character-tile tile--${item?.state ?? 'untested'}`} key={entry.id}><div><strong>{entry.char}</strong><span>{entry.pinyin}</span></div><small>{item ? STATE_LABEL[item.state] : `字表${entry.curriculumList === 1 ? '一' : '二'}`}</small>{entry.contentStatus === 'reviewed' && <b title="词语与场景已审核">✓</b>}</button>; })}</div>
     {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 180)}>再显示 180 个</button>}

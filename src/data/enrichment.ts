@@ -2,6 +2,7 @@ import { CURRICULUM_CHARACTERS, CURRICULUM_PINYIN } from './curriculum-character
 import type { CharacterEntry } from '../types';
 import { ENGLISH_BRIDGES } from './english-bridges';
 import { CHARACTER_FAMILY_BY_CHAR } from './character-families';
+import { CLASSIC_BY_CHAR, IDIOM_BY_CHAR } from './cultural-connections';
 
 type Enrichment = Pick<CharacterEntry, 'words' | 'example' | 'scene' | 'confusables'>;
 
@@ -73,21 +74,6 @@ const seedWords: Record<string, string[]> = {
   纸: ['白纸', '纸张'], 桌: ['书桌', '桌子'], 椅: ['椅子', '桌椅']
 };
 
-const classicLines: Record<string, { line: string; source: string }> = {
-  山: { line: '白日依山尽，黄河入海流。', source: '王之涣《登鹳雀楼》' },
-  月: { line: '床前明月光，疑是地上霜。', source: '李白《静夜思》' },
-  日: { line: '日出江花红胜火，春来江水绿如蓝。', source: '白居易《忆江南》' },
-  春: { line: '春眠不觉晓，处处闻啼鸟。', source: '孟浩然《春晓》' },
-  禾: { line: '锄禾日当午，汗滴禾下土。', source: '李绅《悯农》' },
-  火: { line: '野火烧不尽，春风吹又生。', source: '白居易《赋得古原草送别》' },
-  花: { line: '夜来风雨声，花落知多少。', source: '孟浩然《春晓》' },
-  雪: { line: '孤舟蓑笠翁，独钓寒江雪。', source: '柳宗元《江雪》' },
-  鸟: { line: '千山鸟飞绝，万径人踪灭。', source: '柳宗元《江雪》' },
-  人: { line: '人之初，性本善。', source: '《三字经》' },
-  水: { line: '泉眼无声惜细流，树阴照水爱晴柔。', source: '杨万里《小池》' },
-  书: { line: '读书破万卷，下笔如有神。', source: '杜甫《奉赠韦左丞丈二十二韵》' }
-};
-
 const themes = [
   { name: '数字与数量', chars: '一二三十百千万个大小多少' },
   { name: '方位与自然', chars: '上下中天地日月山水火木土石田禾春夏秋冬东西南北风雨云雪花草树' },
@@ -109,7 +95,8 @@ export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex
   const officialIndex = sourceIndex.get(char)!;
   const curated = enrichment[char];
   const wordHints = curated?.words ?? seedWords[char] ?? [];
-  const classic = classicLines[char];
+  const classic = CLASSIC_BY_CHAR.get(char);
+  const idiom = IDIOM_BY_CHAR.get(char);
   const unicode = char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0');
   return {
     id: officialIndex + 1,
@@ -120,8 +107,8 @@ export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex
     pinyin: CURRICULUM_PINYIN[officialIndex],
     words: wordHints,
     example: curated?.example ?? (wordHints.length ? `读一读：${wordHints.join('，')}。` : '这个字已经收进课程常用字库，更多词语正在审核。'),
-    classicLine: classic?.line,
-    classicSource: classic?.source,
+    classic,
+    idiom,
     theme: themes.find((item) => item.chars.includes(char))?.name ?? '课程常用字',
     scene: curated?.scene ?? '课程阅读与日常书面语中会见到',
     confusables: curated?.confusables ?? [],

@@ -16,6 +16,8 @@ type CharacterEntry = {
   confusables?: string[];
   englishBridges?: { zh: string; en: string }[];
   characterFamily?: { anchor: string; members: string[]; note: string };
+  idiom?: { text: string; meaning: string; example: string };
+  classic?: { line: string; title: string; author: string; dynasty: string; note: string };
   sourceId: string;
   contentStatus: 'basic' | 'reviewed';
 };

@@ -22,8 +22,18 @@ export type CharacterEntry = {
   pinyin: string;
   words: string[];
   example: string;
-  classicLine?: string;
-  classicSource?: string;
+  classic?: {
+    line: string;
+    title: string;
+    author: string;
+    dynasty: string;
+    note: string;
+  };
+  idiom?: {
+    text: string;
+    meaning: string;
+    example: string;
+  };
   theme: string;
   scene: string;
   confusables: string[];

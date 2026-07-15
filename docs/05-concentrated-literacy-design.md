@@ -8,7 +8,7 @@
 
 1. **先单字**：隐藏拼音、词语和句子，独立回想字音，避免上下文替孩子答题。
 2. **再词语**：作答后连接 1-2 个儿童口语中熟悉的高价值词，明确这个字在词里的实际用法。
-3. **后句子**：进入短生活句或有来源的公版经典句，随后在跨日复习中换词、换句再次提取。
+3. **后句子**：先进入短现代生活句，随后在跨日复习中换词、换句再次提取。成语和古诗另放在默认收起的答后文化层，不替代生活句。
 
 单字识别与词语阅读是相关但不同的能力。幼儿对同一汉字在熟悉词语中往往读得更好，所以产品不能把“在词里猜对”当成独立识字，也不能只用孤立闪卡训练。[Wang & McBride：Character reading and word reading in Chinese](https://www.cambridge.org/core/journals/applied-psycholinguistics/article/abs/character-reading-and-word-reading-in-chinese-unique-correlates-for-chinese-kindergarteners/EED6863C9E4A38239C32185A3E150793)
 
@@ -35,10 +35,10 @@
 
 ## 句子内容与版权边界
 
-首版允许两类句子：
+首版允许两类句子，但承担不同任务：
 
-- 编辑原创、适龄的生活句。
-- 已进入公版领域的古诗文名句，并标注作者和篇名。
+- 编辑原创、适龄的生活句进入识字主链路。
+- 已进入公版领域的古诗文名句只进入答后“文化彩蛋”，并标注朝代、作者和篇名。
 
 教材中的现代课文原句不能因为“经典”就直接批量复制。上线前必须建立 `edition / grade / volume / lesson / sourceRef / rightsStatus / reviewedBy` 等字段，确认教材版本、使用许可和人工复核。没有授权时，软件只显示教材主题或自写迁移句，不冒充课文原文。
 
