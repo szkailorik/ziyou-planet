@@ -208,3 +208,20 @@ main { flex: 1; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+
+.poem-heading-row { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 20px; }
+.poem-heading-row .poem-byline { margin: 0; }
+.poem-audio-button { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid #b8cbbd; border-radius: 999px; color: #315a48; background: #edf5ed; cursor: pointer; font-size: 12px; font-weight: 800; }
+.poem-audio-button:hover { border-color: #71927f; }
+.poem-audio-button.is-playing { color: #8a3f32; border-color: #d6a08e; background: #fae9e2; }
+.poem-audio-note { margin: 8px 2px 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.poem-author-card { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 22px; padding: 17px; border: 1px solid #d9e2d7; border-radius: 17px; background: #f2f6ed; }
+.poem-author-card > span { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 13px; color: #fffaf0; background: #426653; font-family: 'STKaiti','KaiTi',serif; font-size: 21px; }
+.poem-author-card strong { display: block; margin: 1px 0 7px; color: #294739; }
+.poem-author-card p { margin: 3px 0; color: #555f58; font-size: 11px; line-height: 1.65; }
+.poem-author-card small { display: block; margin-top: 8px; color: #81513e; line-height: 1.6; }
+
+@media (max-width: 780px) {
+  .poem-heading-row { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .poem-audio-button { width: 100%; justify-content: center; }
+}

@@ -1,3 +1,5 @@
+import { POEM_AUTHOR_PROFILES, type PoemAuthorProfile } from './poem-authors';
+
 export type PoemEvidence = '史实较明确' | '部分可考' | '情境复原';
 
 export type PrimaryPoem = {
@@ -14,9 +16,11 @@ export type PrimaryPoem = {
   evidenceLevel: PoemEvidence;
   image: string;
   imageAlt: string;
+  authorProfile: PoemAuthorProfile;
+  narrationAudio?: string;
 };
 
-type PoemSeed = Omit<PrimaryPoem, 'image' | 'imageAlt'> & { existingImage?: string };
+type PoemSeed = Omit<PrimaryPoem, 'image' | 'imageAlt' | 'authorProfile'> & { existingImage?: string };
 
 const p = (
   id: number,
@@ -114,7 +118,8 @@ const seeds: PoemSeed[] = [
 export const PRIMARY_POEMS: PrimaryPoem[] = seeds.map(({ existingImage, ...poem }) => ({
   ...poem,
   image: existingImage ?? `/images/poems/${poem.slug}.jpg`,
-  imageAlt: `${poem.dynasty}代氛围下《${poem.title}》${poem.interpretation}`
+  imageAlt: `${poem.dynasty}代氛围下《${poem.title}》${poem.interpretation}`,
+  authorProfile: POEM_AUTHOR_PROFILES[poem.author]
 }));
 
 export const PRIMARY_POEM_BY_SLUG = new Map(PRIMARY_POEMS.map((poem) => [poem.slug, poem]));

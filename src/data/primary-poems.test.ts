@@ -18,6 +18,10 @@ describe('primary school poetry library', () => {
       expect(['史实较明确', '部分可考', '情境复原']).toContain(poem.evidenceLevel);
       expect(poem.image).toMatch(/^\/images\/(classics|poems)\/.+\.jpg$/);
       expect(poem.imageAlt).toContain(poem.title);
+      expect(poem.authorProfile).toBeDefined();
+      expect(poem.authorProfile.identity.length).toBeGreaterThan(8);
+      expect(poem.authorProfile.knownFor.length).toBeGreaterThan(8);
+      expect(poem.authorProfile.memoryPoint.length).toBeGreaterThan(8);
     }
   });
 

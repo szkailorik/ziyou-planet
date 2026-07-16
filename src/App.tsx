@@ -4,6 +4,7 @@ import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
 import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
 import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
+import { poemNarrationText, selectMandarinVoice } from './domain/poem-narration';
 import { createCloudFamily, getCloudStatus, joinCloudFamily, leaveCloudFamily, regenerateSyncCode, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
@@ -44,6 +45,7 @@ function speak(text: string, enabled: boolean) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'zh-CN';
   utterance.rate = 0.78;
+  utterance.voice = selectMandarinVoice(window.speechSynthesis.getVoices()) ?? null;
   window.speechSynthesis.speak(utterance);
 }
 
@@ -618,9 +620,44 @@ function PoetryLibrary() {
   const [era, setEra] = useState<PoetryEra>('all');
   const [visible, setVisible] = useState(12);
   const [selected, setSelected] = useState<PrimaryPoem | null>(null);
+  const [narratingSlug, setNarratingSlug] = useState<string | null>(null);
+  const narrationAudio = useRef<HTMLAudioElement | null>(null);
+  function stopNarration() {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    narrationAudio.current?.pause();
+    narrationAudio.current = null;
+    setNarratingSlug(null);
+  }
+  function toggleNarration(poem: PrimaryPoem) {
+    if (narratingSlug === poem.slug) return stopNarration();
+    stopNarration();
+    if (poem.narrationAudio) {
+      const audio = new Audio(poem.narrationAudio);
+      narrationAudio.current = audio;
+      audio.onended = () => setNarratingSlug(null);
+      audio.onerror = () => setNarratingSlug(null);
+      setNarratingSlug(poem.slug);
+      void audio.play().catch(() => setNarratingSlug(null));
+      return;
+    }
+    if (!('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance(poemNarrationText(poem));
+    utterance.lang = 'zh-CN';
+    utterance.rate = 0.84;
+    utterance.pitch = 1;
+    utterance.voice = selectMandarinVoice(window.speechSynthesis.getVoices()) ?? null;
+    utterance.onend = () => setNarratingSlug(null);
+    utterance.onerror = () => setNarratingSlug(null);
+    setNarratingSlug(poem.slug);
+    window.speechSynthesis.speak(utterance);
+  }
+  useEffect(() => () => {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    narrationAudio.current?.pause();
+  }, []);
   useEffect(() => {
     if (!selected) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelected(null); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') { stopNarration(); setSelected(null); } };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [selected]);
@@ -651,12 +688,14 @@ function PoetryLibrary() {
     {matches.length === 0 && <div className="poetry-empty"><strong>还没有找到这首诗</strong><p>可以试试诗名、作者，或输入你记得的一句。</p></div>}
     {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 12)}>再展开 12 篇</button>}
     <p className="source-note poetry-source">范围采用课程标准小学 1—6 年级推荐背诵的 75 篇古诗文；文本异文、作者归属与场景争议会在条目中保留说明。</p>
-    {selected && <div className="poem-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><article className="poem-dialog" role="dialog" aria-modal="true" aria-labelledby="poem-dialog-title" onClick={(event) => event.stopPropagation()}>
-      <button className="dialog-close" aria-label="关闭诗词详情" onClick={() => setSelected(null)}>×</button>
+    {selected && <div className="poem-dialog-backdrop" role="presentation" onClick={() => { stopNarration(); setSelected(null); }}><article className="poem-dialog" role="dialog" aria-modal="true" aria-labelledby="poem-dialog-title" onClick={(event) => event.stopPropagation()}>
+      <button className="dialog-close" aria-label="关闭诗词详情" onClick={() => { stopNarration(); setSelected(null); }}>×</button>
       <figure><img src={selected.image} alt={selected.imageAlt} /><figcaption>原创诗意情境图 · {selected.evidenceLevel}</figcaption></figure>
-      <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><p className="poem-byline">{selected.author}</p>
+      <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><div className="poem-heading-row"><p className="poem-byline">{selected.author}</p><button type="button" className={`poem-audio-button ${narratingSlug === selected.slug ? 'is-playing' : ''}`} aria-pressed={narratingSlug === selected.slug} onClick={() => toggleNarration(selected)}><span aria-hidden="true">{narratingSlug === selected.slug ? '■' : '▶'}</span>{narratingSlug === selected.slug ? '停止朗读' : '听完整朗读'}</button></div>
         <div className="poem-lines">{selected.lines.map((line) => <p key={line}>{line}</p>)}</div>
+        <p className="poem-audio-note">使用本机或 iPad 内置的普通话音色合成；更换诗篇或关闭页面会自动停止。</p>
         <section className="poem-meaning"><span aria-hidden="true">看懂</span><div><strong>这首诗在说什么？</strong><p>{selected.interpretation}</p></div></section>
+        <section className="poem-author-card"><span aria-hidden="true">{selected.authorProfile.kind === '作者' ? '人' : '源'}</span><div><strong>{selected.authorProfile.kind === '作者' ? `认识作者 · ${selected.author}` : `认识作品来源 · ${selected.author}`}</strong><p>{selected.authorProfile.identity}</p><p>{selected.authorProfile.knownFor}</p><small>{selected.authorProfile.memoryPoint}</small></div></section>
         <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>
         <section className="poem-characters"><strong>诗中可以认一认</strong><div>{poemCharacters.map((char) => <span key={char}>{char}</span>)}</div><small>这里只做语境提示，不作为“已经认识”的证据。</small></section>
       </div>
