@@ -3,11 +3,13 @@ import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
 import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
 import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
+import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
 import { createCloudFamily, getCloudStatus, joinCloudFamily, leaveCloudFamily, regenerateSyncCode, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
 type View = 'home' | 'scan' | 'review' | 'library' | 'poetry' | 'report';
-type ScanSession = { ids: number[]; index: number; size: number; startedAt: string };
+type ScanKind = 'placement' | 'coverage' | 'weakness';
+type ScanSession = { ids: number[]; index: number; size: number; kind: ScanKind; startedAt: string };
 type ChildSession = { childId: string; nickname: string; dailyMinutes: 5 | 10 | 15; sound: boolean; englishBridge: boolean };
 type CloudUiState = { status: 'checking' | 'disconnected' | 'syncing' | 'connected' | 'error'; lastSyncAt?: string; message?: string };
 type CloudActions = {
@@ -317,7 +319,7 @@ function Home({ settings, stats, progress, onNavigate }: { settings: ChildSessio
 
       <div className="section-heading"><div><span className="eyebrow">今天的路线</span><h2>选一个短任务出发</h2></div><p>建议每天 {settings.dailyMinutes} 分钟</p></div>
       <section className="task-grid">
-        <TaskCard tone="purple" icon="◎" kicker="记录当前熟悉度" title="熟悉度扫描" text="30、60 或 100 字快速查看，先记录熟悉度，再进入客观复核。" meta="约 5-12 分钟" action="开始扫描" onClick={() => onNavigate('scan')} />
+        <TaskCard tone="purple" icon="◎" kicker="分层抽样定位" title="识字雷达" text="跨难度抽取代表字，跳过已经会的，尽快找到真正薄弱的范围。" meta="每轮约 3-5 分钟" action="开始定位" onClick={() => onNavigate('scan')} />
         <TaskCard tone="green" icon="↻" kicker="到期优先" title="复习乐园" text={stats.due ? `有 ${stats.due} 个字到时间再见面了，听音、辨形、选读音。` : '今天没有到期字，也可以从最近见过的字里来一轮小挑战。'} meta="约 3-5 分钟" action="去复习" onClick={() => onNavigate('review')} />
         <TaskCard tone="orange" icon="▦" kicker="汉字收藏册" title="我的字册" text="按学习状态查找汉字，看看读音、词语和已经留下的证据。" meta={`${stats.scanned} 字已有记录`} action="打开字册" onClick={() => onNavigate('library')} />
       </section>
@@ -358,11 +360,14 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
   const startTime = useRef(Date.now());
   const answerLock = useRef(false);
 
-  function start(size: number) {
-    const untested = CHARACTERS.filter((entry) => !progress.has(entry.id));
-    const seen = CHARACTERS.filter((entry) => progress.has(entry.id));
-    const pool = [...untested, ...seen].slice(0, size).map((entry) => entry.id);
-    setSession({ ids: pool, index: 0, size, startedAt: new Date().toISOString() });
+  const estimate = estimateLiteracy(CHARACTERS, attempts);
+  const placementIds = placementSampleIds(CHARACTERS, attempts, estimate.sampleSize < 24 ? 36 : 24);
+  const coverageIds = coverageSampleIds(CHARACTERS, attempts, 60);
+  const weaknessIds = weaknessSampleIds(attempts, progress, 20);
+
+  function start(ids: number[], kind: ScanKind) {
+    if (!ids.length) return;
+    setSession({ ids, index: 0, size: ids.length, kind, startedAt: new Date().toISOString() });
     setSessionCounts({ sure: 0, unsure: 0, teach: 0 });
     setAnswer(null);
     answerLock.current = false;
@@ -389,19 +394,20 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
   });
 
   if (!session) {
-    return <div className="page narrow-page"><PageIntro eyebrow="熟悉度扫描" title="快速看看哪些字熟、哪些字生" text="这一步只记录熟悉度，不会把一次自评直接算成“稳定掌握”。答完后会显示读音、词语和生活线索。" />
+    return <div className="page narrow-page"><PageIntro eyebrow="分层识字雷达" title="跳过已经会的，快速找到薄弱区" text="系统从课标字表一、二分层抽取代表字，不再从简单字顺序往后扫；每轮只做一小批，逐步缩小识字范围。" />
+      {estimate.sampleSize >= 24 && <section className="placement-summary"><div><span>当前熟悉度范围</span><strong>{estimate.lower}—{estimate.upper}<small> 字</small></strong><p>中心估计约 {estimate.estimate} 字 · {estimate.reliability}</p></div><div><span>定位样本</span><strong>{estimate.sampleSize}<small> 字</small></strong><p>再测不同位置的字，范围会继续收窄</p></div></section>}
       <div className="scan-options">
-        <ScanOption size={30} title="轻松体验" text="适合第一次使用，约 4-5 分钟" recommended onClick={() => start(30)} />
-        <ScanOption size={60} title="多看一些" text="记录更多熟悉度，约 8 分钟" onClick={() => start(60)} />
-        <ScanOption size={100} title="完整一轮" text="得到更完整的熟悉度分布，约 12 分钟" onClick={() => start(100)} />
+        <ScanOption size={placementIds.length} title={estimate.sampleSize < 24 ? '快速定位' : '缩小范围'} text={estimate.sampleSize < 24 ? '跨难度抽样，约 4-5 分钟' : '在不同层级追加样本，约 3 分钟'} recommended onClick={() => start(placementIds, 'placement')} />
+        <ScanOption size={weaknessIds.length || 20} title="薄弱字雷达" text={weaknessIds.length ? `优先重看 ${weaknessIds.length} 个不确定、错误或到期字` : '完成定位后，这里会自动聚集真正薄弱的字'} disabled={!weaknessIds.length} onClick={() => start(weaknessIds, 'weakness')} />
+        <ScanOption size={coverageIds.length} title="扩大覆盖" text="分层抽取 60 个尚未测过的字，适合识字基础较好的孩子" onClick={() => start(coverageIds, 'coverage')} />
       </div>
-      <div className="explain-card"><span>为什么不一次测完 3000 字？</span><p>长时间机械扫描会疲劳，也容易把“看着眼熟”误当成真正会读。更可靠的识字量需要分层抽样、客观题和隔日复测；首版先把快速扫描与最终结论明确分开。</p></div>
-      {attempts.length > 0 && <button className="secondary-button centered" onClick={() => start(30)}>继续扫描尚未见过的字</button>}
+      <div className="explain-card"><span>什么时候需要把 3500 个字全部扫完？</span><p>一般不需要一次逐字测完。先用分层样本得到范围，再追加边界样本；训练只集中在“不确定、答错、到期”的字。只有家长需要逐字盘点时，才用“扩大覆盖”分多天完成全库。</p></div>
     </div>;
   }
 
   if (session.index >= session.ids.length) {
-    return <div className="page narrow-page"><div className="completion-card"><div className="completion-orbit">✦</div><span className="eyebrow">扫描完成</span><h1>你认真看了 {session.size} 个字</h1><p>这是本次熟悉度记录。接下来，系统会把“不确定”和“请教我”的字优先放进复习。</p><div className="completion-stats"><div><strong>{sessionCounts.sure}</strong><small>我会读</small></div><div><strong>{sessionCounts.unsure}</strong><small>不确定</small></div><div><strong>{sessionCounts.teach}</strong><small>请教我</small></div></div><button className="primary-button" onClick={onFinish}>回到今天 →</button><button className="text-button" onClick={() => { onFocusChange(false); setSession(null); }}>再选一轮</button></div></div>;
+    const updatedEstimate = estimateLiteracy(CHARACTERS, attempts);
+    return <div className="page narrow-page"><div className="completion-card"><div className="completion-orbit">✦</div><span className="eyebrow">{session.kind === 'weakness' ? '薄弱字检查完成' : '定位完成'}</span><h1>你认真看了 {session.size} 个字</h1><p>{session.kind === 'weakness' ? '真正薄弱的字会更早进入复习，不需要重复练已经熟悉的字。' : updatedEstimate.sampleSize >= 24 ? `当前熟悉度大约落在 ${updatedEstimate.lower}—${updatedEstimate.upper} 字；继续分层抽样会让范围更可靠。` : '样本还比较少，再完成一轮快速定位就能看到初步范围。'}</p><div className="completion-stats"><div><strong>{sessionCounts.sure}</strong><small>我会读</small></div><div><strong>{sessionCounts.unsure}</strong><small>不确定</small></div><div><strong>{sessionCounts.teach}</strong><small>请教我</small></div></div><button className="primary-button" onClick={() => { onFocusChange(false); setSession(null); }}>{session.kind === 'weakness' ? '查看新的薄弱队列' : '继续缩小范围'} →</button><button className="text-button" onClick={onFinish}>先回到今天</button></div></div>;
   }
 
   const entry = CHARACTER_BY_ID.get(session.ids[session.index])!;
@@ -444,7 +450,7 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
     <div className="focus-top"><button className="quiet-button" onClick={() => { onFocusChange(false); setSession(null); }}>← 暂停</button><div className="focus-progress"><span><b>{session.index + 1}</b> / {session.size}</span><div><i style={{ width: `${pct}%` }} /></div></div><span className="focus-hint">不用着急，认真想一想</span></div>
     <div className="focus-layout">
       <section className="character-stage">
-        <div className="character-label"><span>{entry.theme}</span><small>课标字表{entry.curriculumList === 1 ? '一' : '二'} · 作答后进入词语和句子</small></div>
+        <div className="character-label"><span>{session.kind === 'weakness' ? '薄弱字复查' : entry.theme}</span><small>课标字表{entry.curriculumList === 1 ? '一' : '二'} · 分层定位样本</small></div>
         <CharacterGlyph entry={entry} />
         <p className="prompt-line">{answer ? `记住“${entry.char}”的样子，再看看右边的线索。` : '你会读这个字吗？'}</p>
       </section>
@@ -455,8 +461,8 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
   </div>;
 }
 
-function ScanOption({ size, title, text, recommended, onClick }: { size: number; title: string; text: string; recommended?: boolean; onClick: () => void }) {
-  return <button className="scan-option" onClick={onClick}>{recommended && <b>推荐第一次</b>}<strong>{size}<small>字</small></strong><span>{title}</span><p>{text}</p><i>开始 →</i></button>;
+function ScanOption({ size, title, text, recommended, disabled = false, onClick }: { size: number; title: string; text: string; recommended?: boolean; disabled?: boolean; onClick: () => void }) {
+  return <button className="scan-option" disabled={disabled} onClick={onClick}>{recommended && <b>推荐</b>}<strong>{size}<small>字</small></strong><span>{title}</span><p>{text}</p><i>{disabled ? '等待定位结果' : '开始 →'}</i></button>;
 }
 
 function ContextBridge({ entry, compact = false, showEnglish = false }: { entry: CharacterEntry; compact?: boolean; showEnglish?: boolean }) {
@@ -696,6 +702,7 @@ function ParentGate({ configured, unlock, back, setup, verify }: { configured: b
 
 function Report({ settings, activeChild, setSettings, attempts, setAttempts, progress, stats, setToast, lock, onDataCleared, cloud, cloudActions }: { settings: AppSettings; activeChild: ChildProfile; setSettings: (settings: AppSettings) => Promise<void>; attempts: AttemptEvent[]; setAttempts: (attempts: AttemptEvent[]) => void; progress: ReturnType<typeof progressFromAttempts>; stats: ReturnType<typeof statsShape>; setToast: (text: string) => void; lock: () => void; onDataCleared: () => void; cloud: CloudUiState; cloudActions: CloudActions }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const literacyEstimate = estimateLiteracy(CHARACTERS, attempts);
   const uniqueList1 = [...progress.keys()].filter((id) => (CHARACTER_BY_ID.get(id)?.curriculumList ?? 2) === 1).length;
   const objective = attempts.filter((item) => item.mode !== 'self-check');
   const objectiveCorrect = objective.filter((item) => item.result === 'correct').length;
@@ -766,6 +773,7 @@ function Report({ settings, activeChild, setSettings, attempts, setAttempts, pro
 
   return <div className="page report-page"><div className="report-title"><div><span className="eyebrow">家长中心 · 当前档案</span><h1>{activeChild.nickname} 的学习报告</h1><p>每个孩子的扫描、复习队列和掌握证据完全分开。</p></div><button className="quiet-button" onClick={lock}>锁定家长中心</button></div>
     <section className="report-hero"><div><span className="report-label">当前可确认的稳定掌握</span><strong>{stats.stable}<small> 字</small></strong><p>已扫描 {stats.scanned} 字 · 基本掌握 {stats.basic} 字</p></div><div className="reliability"><span>结论可靠度</span><strong>{reliability}</strong><p>{objective.length ? `已有 ${objective.length} 次客观复核，正确 ${objectiveCorrect} 次。` : '目前只有主观熟悉度记录，不能据此给出精确识字量。'}</p></div></section>
+    {literacyEstimate.sampleSize >= 24 && <section className="placement-report"><div><span className="eyebrow">分层定位结果</span><h2>{literacyEstimate.lower}—{literacyEstimate.upper}<small> 字</small></h2><p>中心估计约 {literacyEstimate.estimate} 字；来自课标字表一、二的 {literacyEstimate.sampleSize} 个代表样本。</p></div><div><strong>{literacyEstimate.reliability}</strong><p>这是“会读”的熟悉度范围，不等于稳定掌握；已审核题库中的自报会读字还会进入客观复核。</p></div></section>}
     <section className="metric-grid"><Metric icon="✓" tone="green" label="我会读（自报）" value={stats.sure} note="等待客观复核" /><Metric icon="~" tone="yellow" label="我不确定" value={stats.unsure} note="优先短期复习" /><Metric icon="✦" tone="red" label="请教教我" value={stats.teach} note="进入学习队列" /><Metric icon="↻" tone="purple" label="现在到期" value={stats.due} note="建议今天再见面" /></section>
     <section className="efficiency-panel"><div><span className="eyebrow">识字自动化效率</span><h2>准确、稳定，再看速度</h2><p>系统静默记录作答时间，不显示倒计时、不做同龄排名；速度不能抵消错误。</p></div><div className="efficiency-metrics"><div><small>客观正确率</small><strong>{objective.length ? `${Math.round(objectiveCorrect / objective.length * 100)}%` : '—'}</strong><span>{objectiveCorrect} / {objective.length} 次</span></div><div><small>正确作答中位数</small><strong>{medianLatency === undefined ? '—' : medianLatency < 1000 ? '<1秒' : `${(medianLatency / 1000).toFixed(1)}秒`}</strong><span>最近 100 次无提示正确</span></div><div><small>自动化识字</small><strong>{automaticCount} 字</strong><span>另有 {developingCount} 字正在提速</span></div></div><p className="source-note">“自动化”需客观正确率 ≥80%、正确中位时间 ≤3 秒，并有跨日和词句语境证据；不同设备的毫秒值仅看个人趋势。</p></section>
     <div className="report-columns"><section className="panel"><div className="panel-title"><h2>课程层级覆盖</h2><span>不是同龄排名</span></div><Coverage label="课标字表一" detail={`${uniqueList1} / 2500 已有记录`} value={uniqueList1 / 2500} tone="purple" /><Coverage label="课标字表二" detail={`${stats.scanned - uniqueList1} / 1000 已有记录`} value={(stats.scanned - uniqueList1) / 1000} tone="orange" /><Coverage label="小学约 3000 字目标" detail={`${stats.stable} 字达到稳定证据`} value={stats.stable / 3000} tone="green" /><p className="source-note">“已有记录”不等于“已掌握”；稳定掌握需要客观题与跨日证据。</p></section>
