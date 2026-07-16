@@ -372,7 +372,14 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!session || answer) return;
+      if (!session || event.repeat) return;
+      if (answer) {
+        if (answer !== 'sure' && !answerLock.current && event.key === 'Enter') {
+          event.preventDefault();
+          next();
+        }
+        return;
+      }
       if (event.key === '1') void respond('sure');
       if (event.key === '2') void respond('unsure');
       if (event.key === '3') void respond('teach-me');
@@ -411,15 +418,18 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
       setAnswer(null);
       return;
     }
+    answerLock.current = false;
     setSessionCounts((current) => ({
       ...current,
       sure: current.sure + (confidence === 'sure' ? 1 : 0),
       unsure: current.unsure + (confidence === 'unsure' ? 1 : 0),
       teach: current.teach + (confidence === 'teach-me' ? 1 : 0)
     }));
+    if (confidence === 'sure') next();
   }
 
   function next() {
+    if (answerLock.current) return;
     answerLock.current = false;
     setAnswer(null);
     setSession((current) => {
@@ -439,7 +449,7 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
         <p className="prompt-line">{answer ? `记住“${entry.char}”的样子，再看看右边的线索。` : '你会读这个字吗？'}</p>
       </section>
       <aside className="focus-side">
-        {!answer ? <><div className="coach-card"><span className="coach-face">◉</span><div><strong>先自己回想</strong><p>能读出来，也知道它常在哪个词里，才选“我会读”。</p></div></div><div className="confidence-buttons"><button className="confidence sure" onClick={() => void respond('sure')}><span>✓</span><div><strong>我会读</strong><small>键盘 1</small></div></button><button className="confidence unsure" onClick={() => void respond('unsure')}><span>~</span><div><strong>我不确定</strong><small>键盘 2</small></div></button><button className="confidence teach" onClick={() => void respond('teach-me')}><span>✦</span><div><strong>请教教我</strong><small>键盘 3</small></div></button></div></> : <><Feedback entry={entry} confidence={answer} settings={settings} /><div className="next-card"><span>这一字的线索已经收好</span><p>{answer === 'sure' ? '之后还会用另一种题型复核。' : '它会更早回到复习队列。'}</p><button className="primary-button" onClick={next}>{session.index + 1 === session.size ? '完成扫描' : '下一个字'} →</button></div></>}
+        {!answer ? <><div className="coach-card"><span className="coach-face">◉</span><div><strong>先自己回想</strong><p>选“我会读”会立即进入下一字；不确定时会先显示学习线索。</p></div></div><div className="confidence-buttons"><button className="confidence sure" aria-keyshortcuts="1" onClick={() => void respond('sure')}><span>✓</span><div><strong>我会读</strong><small>自动下一字 · 键盘 1</small></div></button><button className="confidence unsure" aria-keyshortcuts="2" onClick={() => void respond('unsure')}><span>~</span><div><strong>我不确定</strong><small>键盘 2</small></div></button><button className="confidence teach" aria-keyshortcuts="3" onClick={() => void respond('teach-me')}><span>✦</span><div><strong>请教教我</strong><small>键盘 3</small></div></button></div></> : <><div className="next-card next-card--scan"><div><span>线索已经收好</span><p>这个字会优先复习。</p></div><button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>{session.index + 1 === session.size ? '完成扫描' : '下一个字'}（Enter）→</button></div><Feedback entry={entry} confidence={answer} settings={settings} /></>}
       </aside>
     </div>
   </div>;
@@ -483,6 +493,27 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
   const started = useRef(Date.now());
   const reviewLock = useRef(false);
 
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (choice !== null) {
+        if (!reviewLock.current && event.key === 'Enter') {
+          event.preventDefault();
+          next();
+        }
+        return;
+      }
+      const optionIndex = Number(event.key) - 1;
+      if (optionIndex < 0 || optionIndex > 3) return;
+      const currentEntry = CHARACTER_BY_ID.get(queueIds[index]);
+      const option = currentEntry ? makePinyinChoices(currentEntry)[optionIndex] : undefined;
+      if (option) void choose(option);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   if (!active) {
     return <div className="page narrow-page"><PageIntro eyebrow="复习乐园" title="在快要忘记时，再见一次" text="这里优先安排“不确定、请教我”和到期的字。小挑战使用客观读音选择，为掌握度增加一条新证据。" />
       <div className="review-preview"><div className="review-stack">{candidateIds.slice(0, 4).map((id, i) => <span key={id} style={{ transform: `translate(${i * 12}px, ${i * 7}px) rotate(${i * 2 - 3}deg)` }}>{CHARACTER_BY_ID.get(id)?.char}</span>)}</div><div><span className="eyebrow">今日队列</span><h2>{candidateIds.length ? `${candidateIds.length} 个字准备好了` : '还没有可复习的审核字'}</h2><p>{candidateIds.length ? '每题只选读音；答完立即反馈，不设倒计时。' : '先完成一轮熟悉度扫描；只有读音内容已审核的字才会进入客观题。'}</p><button className="primary-button" disabled={!candidateIds.length} onClick={() => { setQueueIds([...candidateIds]); setActive(true); setIndex(0); reviewLock.current = false; onFocusChange(true); started.current = Date.now(); }}>{candidateIds.length ? '开始小挑战' : '暂无任务'} →</button></div></div>
@@ -510,10 +541,13 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
     } catch {
       reviewLock.current = false;
       setChoice(null);
+      return;
     }
+    reviewLock.current = false;
   }
 
   function next() {
+    if (reviewLock.current) return;
     reviewLock.current = false;
     setChoice(null);
     setIndex((current) => {
@@ -523,7 +557,7 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
     started.current = Date.now();
   }
 
-    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">选出这个字的读音</span></div><div className="quiz-card"><CharacterGlyph entry={entry} small /><div className="pinyin-choices">{choices.map((value) => <button disabled={answered} aria-label={answered && value === entry.pinyin ? `${value}，正确答案` : value} key={value} className={answered ? value === entry.pinyin ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === entry.pinyin ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? '答对了！' : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button><button className="primary-button" onClick={next}>下一题 →</button></div>}</div></div>;
+    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">选出这个字的读音 · 键盘 1—4</span></div><div className="quiz-card"><CharacterGlyph entry={entry} small /><div className="pinyin-choices">{choices.map((value, optionIndex) => <button disabled={answered} aria-keyshortcuts={String(optionIndex + 1)} aria-label={answered && value === entry.pinyin ? `${value}，正确答案` : value} key={value} className={answered ? value === entry.pinyin ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === entry.pinyin ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? '答对了！' : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button><button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>下一题（Enter）→</button></div>}</div></div>;
 }
 
 function makePinyinChoices(entry: CharacterEntry) {
