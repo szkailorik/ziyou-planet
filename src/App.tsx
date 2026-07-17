@@ -4,8 +4,8 @@ import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
 import { confidenceToResult, progressFromAttempts } from './domain/mastery';
 import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
-import { poemNarrationText, selectMandarinVoice } from './domain/poem-narration';
 import { makeContextChoices, makeContextPrompt, makePinyinChoices, reviewCandidateIds, reviewModeFor, type ObjectiveReviewMode } from './domain/review';
+import QwenSpeechButton, { stopQwenSpeech } from './QwenSpeechButton';
 import { createCloudFamily, createDeviceInvite, getCloudStatus, joinCloudFamily, leaveCloudFamily, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
@@ -38,16 +38,6 @@ function makeAttempt(
     id: crypto.randomUUID(), childId: settings.childId, characterId: entry.id, mode, result,
     confidence, latencyMs, hintUsed: false, occurredAt: new Date().toISOString(), ruleVersion: 'v1'
   };
-}
-
-function speak(text: string, enabled: boolean) {
-  if (!enabled || !('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'zh-CN';
-  utterance.rate = 0.78;
-  utterance.voice = selectMandarinVoice(window.speechSynthesis.getVoices()) ?? null;
-  window.speechSynthesis.speak(utterance);
 }
 
 function downloadJson(payload: BackupPayload) {
@@ -489,7 +479,7 @@ function CulturalBridge({ entry }: { entry: CharacterEntry }) {
 }
 
 function Feedback({ entry, confidence, settings }: { entry: CharacterEntry; confidence: Confidence; settings: ChildSession }) {
-  return <div className="feedback-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : confidence === 'unsure' ? '认真地说“不确定”也很棒' : '现在一起认识它'}</span><h2>{entry.pinyin}</h2></div><button className="sound-button" title="使用设备自带中文语音，音色与多音字效果可能因设备而异" onClick={() => speak(entry.char, settings.sound)} aria-label={`用设备语音播放${entry.char}`}>♪ 点读</button></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} /><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div><p className="evidence-note">先单字回想，答后连接词和句；换题型、换语境、隔天还能认出，才会成为“稳定掌握”。</p></div>;
+  return <div className="feedback-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : confidence === 'unsure' ? '认真地说“不确定”也很棒' : '现在一起认识它'}</span><h2>{entry.pinyin}</h2></div><QwenSpeechButton request={{ kind: 'character', character: entry.char }} enabled={settings.sound} className="sound-button" readyLabel="点读" playingLabel="停止" preparingLabel="准备中…" ariaLabel={`用阿里云 Qwen3-TTS 播放${entry.char}`} fallbackText={entry.char} fallbackRate={0.78} /></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} /><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div><p className="evidence-note">先单字回想，答后连接词和句；换题型、换语境、隔天还能认出，才会成为“稳定掌握”。</p></div>;
 }
 
 function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { settings: ChildSession; attempts: AttemptEvent[]; progress: ReturnType<typeof progressFromAttempts>; addAttempt: (event: AttemptEvent) => Promise<void>; onFocusChange: (active: boolean) => void }) {
@@ -582,7 +572,7 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
     started.current = Date.now();
   }
 
-    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { clearAutoNext(); setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">{taskMode === 'context-choice' ? '把合适的字放回句子 · 键盘 1—4' : '选出这个字的读音 · 键盘 1—4'}</span></div><div className={`quiz-card ${taskMode === 'context-choice' ? 'quiz-card--context' : ''}`}>{taskMode === 'context-choice' ? <div className="context-mission" aria-label="词句小侦探：先读完整句子，再选择合适的字"><span aria-hidden="true">句</span><strong>词句小侦探</strong><p>先读完整句子，再看哪个字放进去最合适。答案会在作答后揭晓。</p></div> : <CharacterGlyph entry={entry} small />}<div className="quiz-question"><span className="quiz-question-label">{taskMode === 'context-choice' ? '哪个字放进去最合适？' : '这个字怎么读？'}</span>{taskMode === 'context-choice' && <p className="context-question"><span>{contextPrompt.split('＿').map((part, partIndex, all) => <span key={`${part}-${partIndex}`}>{part}{partIndex < all.length - 1 && <b>＿</b>}</span>)}</span></p>}<div className="pinyin-choices">{choices.map((value, optionIndex) => <button disabled={answered} aria-keyshortcuts={String(optionIndex + 1)} aria-label={answered && value === correctValue ? `${value}，正确答案` : value} key={value} className={answered ? value === correctValue ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === correctValue ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div></div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? (taskMode === 'context-choice' ? '认出来了，放回句子正合适！' : '读音认对了！') : taskMode === 'context-choice' ? `差一点，句子里应该放“${entry.char}”` : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button>{correct ? <small className="auto-next-note">马上自动进入下一题…</small> : <button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>继续下一题（Enter）→</button>}</div>}</div></div>;
+    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { clearAutoNext(); setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">{taskMode === 'context-choice' ? '把合适的字放回句子 · 键盘 1—4' : '选出这个字的读音 · 键盘 1—4'}</span></div><div className={`quiz-card ${taskMode === 'context-choice' ? 'quiz-card--context' : ''}`}>{taskMode === 'context-choice' ? <div className="context-mission" aria-label="词句小侦探：先读完整句子，再选择合适的字"><span aria-hidden="true">句</span><strong>词句小侦探</strong><p>先读完整句子，再看哪个字放进去最合适。答案会在作答后揭晓。</p></div> : <CharacterGlyph entry={entry} small />}<div className="quiz-question"><span className="quiz-question-label">{taskMode === 'context-choice' ? '哪个字放进去最合适？' : '这个字怎么读？'}</span>{taskMode === 'context-choice' && <p className="context-question"><span>{contextPrompt.split('＿').map((part, partIndex, all) => <span key={`${part}-${partIndex}`}>{part}{partIndex < all.length - 1 && <b>＿</b>}</span>)}</span></p>}<div className="pinyin-choices">{choices.map((value, optionIndex) => <button disabled={answered} aria-keyshortcuts={String(optionIndex + 1)} aria-label={answered && value === correctValue ? `${value}，正确答案` : value} key={value} className={answered ? value === correctValue ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === correctValue ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div></div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? (taskMode === 'context-choice' ? '认出来了，放回句子正合适！' : '读音认对了！') : taskMode === 'context-choice' ? `差一点，句子里应该放“${entry.char}”` : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><QwenSpeechButton request={{ kind: 'character', character: entry.char }} enabled={settings.sound} className="sound-button" readyLabel="再听一遍" playingLabel="停止" preparingLabel="准备中…" ariaLabel={`用阿里云 Qwen3-TTS 再播放一次${entry.char}`} fallbackText={entry.char} fallbackRate={0.78} />{correct ? <small className="auto-next-note">马上自动进入下一题…</small> : <button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>继续下一题（Enter）→</button>}</div>}</div></div>;
 }
 
 function Library({ progress, showEnglish }: { progress: ReturnType<typeof progressFromAttempts>; showEnglish: boolean }) {
@@ -627,40 +617,13 @@ function PoetryLibrary() {
   const [era, setEra] = useState<PoetryEra>('all');
   const [visible, setVisible] = useState(12);
   const [selected, setSelected] = useState<PrimaryPoem | null>(null);
-  const [narratingSlug, setNarratingSlug] = useState<string | null>(null);
-  const narrationAudio = useRef<HTMLAudioElement | null>(null);
   function stopNarration() {
+    stopQwenSpeech();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    narrationAudio.current?.pause();
-    narrationAudio.current = null;
-    setNarratingSlug(null);
-  }
-  function toggleNarration(poem: PrimaryPoem) {
-    if (narratingSlug === poem.slug) return stopNarration();
-    stopNarration();
-    if (poem.narrationAudio) {
-      const audio = new Audio(poem.narrationAudio);
-      narrationAudio.current = audio;
-      audio.onended = () => setNarratingSlug(null);
-      audio.onerror = () => setNarratingSlug(null);
-      setNarratingSlug(poem.slug);
-      void audio.play().catch(() => setNarratingSlug(null));
-      return;
-    }
-    if (!('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance(poemNarrationText(poem));
-    utterance.lang = 'zh-CN';
-    utterance.rate = 0.84;
-    utterance.pitch = 1;
-    utterance.voice = selectMandarinVoice(window.speechSynthesis.getVoices()) ?? null;
-    utterance.onend = () => setNarratingSlug(null);
-    utterance.onerror = () => setNarratingSlug(null);
-    setNarratingSlug(poem.slug);
-    window.speechSynthesis.speak(utterance);
   }
   useEffect(() => () => {
+    stopQwenSpeech();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    narrationAudio.current?.pause();
   }, []);
   useEffect(() => {
     if (!selected) return;
@@ -698,9 +661,9 @@ function PoetryLibrary() {
     {selected && <div className="poem-dialog-backdrop" role="presentation" onClick={() => { stopNarration(); setSelected(null); }}><article className="poem-dialog" role="dialog" aria-modal="true" aria-labelledby="poem-dialog-title" onClick={(event) => event.stopPropagation()}>
       <button className="dialog-close" aria-label="关闭诗词详情" onClick={() => { stopNarration(); setSelected(null); }}>×</button>
       <figure><img src={selected.image} alt={selected.imageAlt} /><figcaption>原创诗意情境图 · {selected.evidenceLevel}</figcaption></figure>
-      <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><div className="poem-heading-row"><p className="poem-byline">{selected.author}</p><button type="button" className={`poem-audio-button ${narratingSlug === selected.slug ? 'is-playing' : ''}`} aria-pressed={narratingSlug === selected.slug} onClick={() => toggleNarration(selected)}><span aria-hidden="true">{narratingSlug === selected.slug ? '■' : '▶'}</span>{narratingSlug === selected.slug ? '停止朗读' : '听完整朗读'}</button></div>
+      <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><div className="poem-heading-row"><p className="poem-byline">{selected.author}</p><QwenSpeechButton key={selected.slug} request={{ kind: 'poem', slug: selected.slug }} enabled className="poem-audio-button" readyLabel="听完整朗读" playingLabel="停止朗读" preparingLabel="朗读准备中…" ariaLabel={`使用阿里云 Qwen3-TTS 朗读${selected.title}`} fallbackText={[`《${selected.title}》`, `${selected.dynasty}，${selected.author}`, ...selected.lines].join('。\n')} fallbackRate={0.84} /></div>
         <div className="poem-lines">{selected.lines.map((line) => <p key={line}>{line}</p>)}</div>
-        <p className="poem-audio-note">使用本机或 iPad 内置的普通话音色合成；更换诗篇或关闭页面会自动停止。</p>
+        <p className="poem-audio-note">使用阿里云 Qwen3‑TTS 自然普通话朗读；断网时自动使用设备语音，更换诗篇或关闭页面会停止。</p>
         <section className="poem-meaning"><span aria-hidden="true">看懂</span><div><strong>这首诗在说什么？</strong><p>{selected.interpretation}</p></div></section>
         <section className="poem-author-card"><span aria-hidden="true">{selected.authorProfile.kind === '作者' ? '人' : '源'}</span><div><strong>{selected.authorProfile.kind === '作者' ? `认识作者 · ${selected.author}` : `认识作品来源 · ${selected.author}`}</strong><p>{selected.authorProfile.identity}</p><p>{selected.authorProfile.knownFor}</p><small>{selected.authorProfile.memoryPoint}</small></div></section>
         <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>

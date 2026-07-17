@@ -1,0 +1,38 @@
+.sound-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.sound-button:disabled,
+.poem-audio-button:disabled {
+  opacity: .62;
+  cursor: wait;
+}
+
+.sound-button.is-playing {
+  color: #8a3f32;
+  border-color: #d6a08e;
+  background: #fae9e2;
+}
+
+.sound-button span,
+.poem-audio-button span {
+  min-width: 1em;
+  text-align: center;
+}
+
+.sound-button:disabled span,
+.poem-audio-button:disabled span {
+  animation: tts-pulse .9s ease-in-out infinite alternate;
+}
+
+@keyframes tts-pulse {
+  to { opacity: .35; transform: scale(.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sound-button:disabled span,
+  .poem-audio-button:disabled span { animation: none; }
+}

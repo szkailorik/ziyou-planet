@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './styles.css';
 import './learning-optimizations.css';
+import './tts.css';
 
 registerSW({ immediate: true });
 
