@@ -660,11 +660,17 @@ function PoetryLibrary() {
     <p className="source-note poetry-source">范围采用课程标准小学 1—6 年级推荐背诵的 75 篇古诗文；文本异文、作者归属与场景争议会在条目中保留说明。</p>
     {selected && <div className="poem-dialog-backdrop" role="presentation" onClick={() => { stopNarration(); setSelected(null); }}><article className="poem-dialog" role="dialog" aria-modal="true" aria-labelledby="poem-dialog-title" onClick={(event) => event.stopPropagation()}>
       <button className="dialog-close" aria-label="关闭诗词详情" onClick={() => { stopNarration(); setSelected(null); }}>×</button>
-      <figure><img src={selected.image} alt={selected.imageAlt} /><figcaption>原创诗意情境图 · {selected.evidenceLevel}</figcaption></figure>
-      <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><div className="poem-heading-row"><p className="poem-byline">{selected.author}</p><QwenSpeechButton key={selected.slug} request={{ kind: 'poem', slug: selected.slug }} enabled className="poem-audio-button" readyLabel="听完整朗读" playingLabel="停止朗读" preparingLabel="朗读准备中…" ariaLabel={`使用阿里云 Qwen3-TTS 朗读${selected.title}`} fallbackText={[`《${selected.title}》`, `${selected.dynasty}，${selected.author}`, ...selected.lines].join('。\n')} fallbackRate={0.84} /></div>
-        <div className="poem-lines">{selected.lines.map((line) => <p key={line}>{line}</p>)}</div>
-        <p className="poem-audio-note">使用阿里云 Qwen3‑TTS 自然普通话朗读；断网时自动使用设备语音，更换诗篇或关闭页面会停止。</p>
-        <section className="poem-meaning"><span aria-hidden="true">看懂</span><div><strong>这首诗在说什么？</strong><p>{selected.interpretation}</p></div></section>
+      <section className="poem-dialog-opening">
+        <div className="poem-dialog-visual">
+          <figure><img className="poem-dialog-image" src={selected.image} alt={selected.imageAlt} /><figcaption>原创诗意情境图 · {selected.evidenceLevel}</figcaption></figure>
+          <section className="poem-meaning"><span aria-hidden="true">看懂</span><div><strong>这幅画和诗在说什么？</strong><p>{selected.interpretation}</p></div></section>
+        </div>
+        <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><div className="poem-heading-row"><p className="poem-byline">{selected.author}</p><QwenSpeechButton key={selected.slug} request={{ kind: 'poem', slug: selected.slug }} enabled className="poem-audio-button" readyLabel="听完整朗读" playingLabel="停止朗读" preparingLabel="朗读准备中…" ariaLabel={`使用阿里云 Qwen3-TTS 朗读${selected.title}`} fallbackText={[`《${selected.title}》`, `${selected.dynasty}，${selected.author}`, ...selected.lines].join('。\n')} fallbackRate={0.84} /></div>
+          <div className="poem-lines">{selected.lines.map((line) => <p key={line}>{line}</p>)}</div>
+          <p className="poem-audio-note">使用阿里云 Qwen3‑TTS 自然普通话朗读；断网时自动使用设备语音，更换诗篇或关闭页面会停止。</p>
+        </div>
+      </section>
+      <div className="poem-dialog-details">
         <section className="poem-author-card"><span aria-hidden="true">{selected.authorProfile.kind === '作者' ? '人' : '源'}</span><div><strong>{selected.authorProfile.kind === '作者' ? `认识作者 · ${selected.author}` : `认识作品来源 · ${selected.author}`}</strong><p>{selected.authorProfile.identity}</p><p>{selected.authorProfile.knownFor}</p><small>{selected.authorProfile.memoryPoint}</small></div></section>
         <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>
         <section className="poem-characters"><strong>诗中可以认一认</strong><div>{poemCharacters.map((char) => <span key={char}>{char}</span>)}</div><small>这里只做语境提示，不作为“已经认识”的证据。</small></section>
