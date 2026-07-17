@@ -39,7 +39,8 @@ async function prepareSpeechBlob(request: QwenSpeechRequest) {
   const staticUrl = prebuiltSpeechUrl(request);
   if (staticUrl) {
     const staticResponse = await fetch(staticUrl, { cache: 'force-cache' });
-    if (staticResponse.ok) return URL.createObjectURL(await staticResponse.blob());
+    const contentType = staticResponse.headers.get('Content-Type') ?? '';
+    if (staticResponse.ok && contentType.startsWith('audio/')) return URL.createObjectURL(await staticResponse.blob());
   }
   const response = await fetch('/api/tts', {
     method: 'POST',
