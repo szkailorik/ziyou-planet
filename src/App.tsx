@@ -663,7 +663,6 @@ function PoetryLibrary() {
       <section className="poem-dialog-opening">
         <div className="poem-dialog-visual">
           <figure><img className="poem-dialog-image" src={selected.image} alt={selected.imageAlt} /><figcaption>原创诗意情境图 · {selected.evidenceLevel}</figcaption></figure>
-          <section className="poem-meaning"><span aria-hidden="true">看懂</span><div><strong>这幅画和诗在说什么？</strong><p>{selected.interpretation}</p></div></section>
         </div>
         <div className="poem-dialog-copy"><span className="eyebrow">第 {selected.id} / 75 篇 · {selected.dynasty}</span><h2 id="poem-dialog-title">{selected.title}</h2><div className="poem-heading-row"><p className="poem-byline">{selected.author}</p><QwenSpeechButton key={selected.slug} request={{ kind: 'poem', slug: selected.slug }} enabled className="poem-audio-button" readyLabel="听完整朗读" playingLabel="停止朗读" preparingLabel="朗读准备中…" ariaLabel={`使用阿里云 Qwen3-TTS 朗读${selected.title}`} fallbackText={[`《${selected.title}》`, `${selected.dynasty}，${selected.author}`, ...selected.lines].join('。\n')} fallbackRate={0.84} /></div>
           <div className="poem-lines">{selected.lines.map((line) => <p key={line}>{line}</p>)}</div>
@@ -671,20 +670,26 @@ function PoetryLibrary() {
         </div>
       </section>
       <div className="poem-dialog-details">
+        <section className="poem-child-explanation" aria-label={`${selected.title}儿童白话讲解`}>
+          <header><span aria-hidden="true">讲</span><div><small>先听懂，再慢慢品</small><strong>这首诗到底讲了什么？</strong></div></header>
+          <div><p>{selected.interpretation}</p><aside><b>跟着诗走</b><span>{selected.learningGuide.readingHint}</span></aside></div>
+        </section>
+        <section className="poem-keywords-card" aria-label={`${selected.title}关键词解释`}>
+          <header><span aria-hidden="true">词</span><div><strong>先弄懂这些古词</strong><small>点破最容易卡住的词，整首诗就顺了。</small></div></header>
+          <dl>{selected.learningGuide.glossary.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.meaning}</dd></div>)}</dl>
+        </section>
         <section className="poem-exam-card" aria-label={`${selected.title}常见考点`}>
           <header><span aria-hidden="true">考</span><div><strong>中国小学常见考点</strong><small>按背诵默写、字词、文学常识和诗意理解整理；不同地区题型会有差异，不作押题。</small></div></header>
           <div><p><b>常见问法</b>{selected.examPoint.focus}</p><p><b>易错提醒</b>{selected.examPoint.pitfall}</p></div>
         </section>
-        <section className="poem-learning-card" aria-label={`${selected.title}儿童理解卡`}>
-          <header><span aria-hidden="true">懂</span><div><strong>三步读懂这首诗</strong><small>先扫清古词，再认识人物地点，最后抓住诗里的关键变化。</small></div></header>
-          <div className="poem-learning-grid">
-            <section className="poem-glossary"><h3><b>1</b> 关键词是什么意思？</h3><dl>{selected.learningGuide.glossary.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.meaning}</dd></div>)}</dl></section>
-            <section><h3><b>2</b> 人物和地点线索</h3><p>{selected.learningGuide.context}</p></section>
-            <section><h3><b>3</b> 读诗时抓住什么？</h3><p>{selected.learningGuide.readingHint}</p></section>
+        <details className="poem-background-details">
+          <summary><span aria-hidden="true">＋</span><div><strong>想再了解：作者、人物地点与时代</strong><small>进阶内容默认收起，不影响孩子先理解诗意。</small></div></summary>
+          <div className="poem-background-grid">
+            <section className="poem-author-card"><span aria-hidden="true">{selected.authorProfile.kind === '作者' ? '人' : '源'}</span><div><strong>{selected.authorProfile.kind === '作者' ? `认识作者 · ${selected.author}` : `认识作品来源 · ${selected.author}`}</strong><p>{selected.authorProfile.identity}</p><p>{selected.authorProfile.knownFor}</p><small>{selected.authorProfile.memoryPoint}</small></div></section>
+            <section className="poem-context-card"><strong>人物和地点线索</strong><p>{selected.learningGuide.context}</p></section>
+            <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>
           </div>
-        </section>
-        <section className="poem-author-card"><span aria-hidden="true">{selected.authorProfile.kind === '作者' ? '人' : '源'}</span><div><strong>{selected.authorProfile.kind === '作者' ? `认识作者 · ${selected.author}` : `认识作品来源 · ${selected.author}`}</strong><p>{selected.authorProfile.identity}</p><p>{selected.authorProfile.knownFor}</p><small>{selected.authorProfile.memoryPoint}</small></div></section>
-        <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>
+        </details>
         <section className="poem-characters"><strong>诗中可以认一认</strong><div>{poemCharacters.map((char) => <span key={char}>{char}</span>)}</div><small>这里只做语境提示，不作为“已经认识”的证据。</small></section>
       </div>
     </article></div>}
