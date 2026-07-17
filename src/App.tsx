@@ -6,6 +6,7 @@ import { confidenceToResult, progressFromAttempts } from './domain/mastery';
 import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
 import { makeContextChoices, makeContextPrompt, makePinyinChoices, reviewCandidateIds, reviewModeFor, type ObjectiveReviewMode } from './domain/review';
 import QwenSpeechButton, { stopQwenSpeech } from './QwenSpeechButton';
+import PoetryTrainer from './PoetryTrainer';
 import { createCloudFamily, createDeviceInvite, getCloudStatus, joinCloudFamily, leaveCloudFamily, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
@@ -257,7 +258,7 @@ export default function App() {
         {view === 'scan' && <Scan settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} onFinish={() => { setToast(`${activeChild.nickname} 的扫描已保存`); navigate('home'); }} />}
         {view === 'review' && <Review settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} />}
         {view === 'library' && <Library progress={progress} showEnglish={settings.englishBridge} />}
-        {view === 'poetry' && <PoetryLibrary />}
+        {view === 'poetry' && <PoetryLibrary learnerName={activeChild.nickname} />}
         {view === 'report' && (
           parentUnlocked
             ? <Report settings={settings} activeChild={activeChild} setSettings={async (next) => { setSettings(next); await saveSettings(next); }} attempts={childAttempts} setAttempts={setAttempts} progress={progress} stats={stats} setToast={setToast} lock={() => setParentUnlocked(false)} onDataCleared={() => { setParentPinConfigured(false); setParentUnlocked(false); }} cloud={cloud} cloudActions={cloudActions} />
@@ -612,11 +613,12 @@ const POETRY_ERAS: { value: PoetryEra; label: string; match: (poem: PrimaryPoem)
   { value: 'late', label: '元明清', match: (poem) => ['元', '明', '清'].includes(poem.dynasty) }
 ];
 
-function PoetryLibrary() {
+function PoetryLibrary({ learnerName }: { learnerName: string }) {
   const [query, setQuery] = useState('');
   const [era, setEra] = useState<PoetryEra>('all');
   const [visible, setVisible] = useState(12);
   const [selected, setSelected] = useState<PrimaryPoem | null>(null);
+  const [trainingOpen, setTrainingOpen] = useState(false);
   function stopNarration() {
     stopQwenSpeech();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -641,9 +643,11 @@ function PoetryLibrary() {
   }, [era, query]);
   const poemCharacters = selected ? [...new Set(selected.lines.join('').split('').filter((char) => CHARACTER_BY_ID.has(CHARACTERS.find((entry) => entry.char === char)?.id ?? -1)))].slice(0, 18) : [];
 
+  if (trainingOpen) return <PoetryTrainer learnerName={learnerName} onBack={() => setTrainingOpen(false)} />;
+
   return <div className="page poetry-page">
     <section className="poetry-hero">
-      <div><span className="eyebrow">小学诗词馆</span><h1>75 篇诗词，<br />75 个可以走进去的世界</h1><p>依据义务教育语文课程标准小学阶段推荐篇目整理。画面帮助理解诗意，但不会替代朗读，也不计入识字掌握分。</p></div>
+      <div><span className="eyebrow">小学诗词馆</span><h1>75 篇诗词，<br />75 个可以走进去的世界</h1><p>依据义务教育语文课程标准小学阶段推荐篇目整理。画面帮助理解诗意，但不会替代朗读，也不计入识字掌握分。</p><button className="poetry-trainer-entry" onClick={() => setTrainingOpen(true)}><span aria-hidden="true">闯</span><b>开始诗词选择题训练</b><small>10题快速练 · 背诵 · 词义 · 综合挑战</small><i>→</i></button></div>
       <div className="poetry-hero-seal" aria-hidden="true"><span>诗</span><small>从画入境<br />从句识字</small></div>
     </section>
     <div className="library-toolbar poetry-toolbar"><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="搜索诗名、作者或诗句" value={query} onChange={(event) => { setQuery(event.target.value); setVisible(12); }} placeholder="搜诗名、作者或一句诗" /></label><div className="filter-pills">{POETRY_ERAS.map((item) => <button aria-pressed={era === item.value} key={item.value} className={era === item.value ? 'active' : ''} onClick={() => { setEra(item.value); setVisible(12); }}>{item.label}</button>)}</div></div>

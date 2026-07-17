@@ -311,7 +311,69 @@ main { flex: 1; }
 .poem-author-card p { margin: 3px 0; color: #555f58; font-size: 11px; line-height: 1.65; }
 .poem-author-card small { display: block; margin-top: 8px; color: #81513e; line-height: 1.6; }
 
+.poetry-trainer-entry { width: min(520px,100%); min-height: 70px; display: grid; grid-template-columns: 46px 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 12px; margin-top: 24px; padding: 11px 14px; border: 1px solid rgba(255,240,204,.28); border-radius: 18px; text-align: left; color: #fff8e8; background: rgba(255,255,255,.09); cursor: pointer; backdrop-filter: blur(5px); }
+.poetry-trainer-entry:hover { background: rgba(255,255,255,.15); }
+.poetry-trainer-entry > span { grid-row: 1 / 3; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: #5c372b; background: #f3d58e; font-family: 'STKaiti','KaiTi',serif; font-size: 23px; }
+.poetry-trainer-entry b { align-self: end; font-size: 13px; }
+.poetry-trainer-entry small { align-self: start; color: rgba(255,248,232,.66); font-size: 9px; }
+.poetry-trainer-entry i { grid-column: 3; grid-row: 1 / 3; font-style: normal; font-size: 20px; }
+
+.poetry-trainer-page { width: min(1120px,calc(100% - 40px)); }
+.poetry-trainer-back { margin-bottom: 16px; }
+.poetry-trainer-hero { min-height: 330px; display: grid; grid-template-columns: 1fr 260px; align-items: center; gap: 45px; padding: 48px 60px; overflow: hidden; border-radius: 34px; color: #fff9e9; background: radial-gradient(circle at 83% 14%,rgba(255,221,137,.26),transparent 30%),linear-gradient(135deg,#283d53,#48334d 75%,#784238); box-shadow: 0 22px 60px rgba(47,41,60,.16); }
+.poetry-trainer-hero h1 { margin: 10px 0 16px; font-family: 'STKaiti','KaiTi',serif; font-size: clamp(42px,5vw,61px); font-weight: 500; line-height: 1.16; }
+.poetry-trainer-hero p { max-width: 650px; margin: 0; color: rgba(255,249,233,.75); line-height: 1.85; }
+.poetry-trainer-hero .eyebrow { color: #f0d991; }
+.poetry-trainer-badge { width: 210px; height: 210px; display: grid; place-content: center; justify-items: center; border: 1px solid rgba(255,242,201,.36); border-radius: 50%; box-shadow: 0 0 0 18px rgba(255,255,255,.035); }
+.poetry-trainer-badge strong { font-family: 'STKaiti','KaiTi',serif; font-size: 88px; font-weight: 500; line-height: 1; }
+.poetry-trainer-badge span { margin-top: 8px; color: rgba(255,249,230,.63); font-size: 10px; letter-spacing: .22em; }
+.poetry-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 25px; }
+.poetry-mode-card { min-height: 225px; position: relative; display: grid; grid-template-columns: 64px 1fr; grid-template-rows: auto auto 1fr auto; gap: 0 16px; padding: 28px; overflow: hidden; border: 1px solid #e1d9ca; border-radius: 25px; text-align: left; color: var(--ink); background: #fffdf8; box-shadow: 0 12px 34px rgba(60,45,31,.07); cursor: pointer; }
+.poetry-mode-card:hover { transform: translateY(-3px); box-shadow: 0 17px 40px rgba(60,45,31,.12); }
+.poetry-mode-card > span { grid-row: 1 / 5; width: 64px; height: 64px; display: grid; place-items: center; border-radius: 20px; color: white; background: #76569a; font-family: 'STKaiti','KaiTi',serif; font-size: 32px; }
+.poetry-mode-card--2 > span { background: #3e715d; }.poetry-mode-card--3 > span { background: #ae7040; }.poetry-mode-card--4 > span { background: #a54e46; }
+.poetry-mode-card small { color: #8a7c6c; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.poetry-mode-card strong { margin-top: 5px; font-size: 21px; }
+.poetry-mode-card p { margin: 12px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.poetry-mode-card b { color: #824934; font-size: 11px; }
+.poetry-quiz-boundary { margin: 20px 0 0; text-align: center; color: var(--muted); font-size: 10px; }
+
+.poetry-quiz-screen { width: min(1000px,calc(100% - 34px)); margin: 0 auto; padding: 28px 0 60px; }
+.poetry-quiz-top { display: grid; grid-template-columns: 120px 1fr 150px; align-items: center; gap: 24px; margin-bottom: 22px; }
+.poetry-quiz-top > div { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 13px; }
+.poetry-quiz-top > div > span { color: #5b5361; font-size: 12px; }.poetry-quiz-top > div > span b { color: #71498c; font-size: 18px; }
+.poetry-quiz-top > div > div { height: 8px; overflow: hidden; border-radius: 99px; background: #e3ddea; }.poetry-quiz-top > div > div i { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg,#7453a1,#bd7761); transition: width .2s ease; }
+.poetry-quiz-top > small { text-align: right; color: #7b6c7e; font-weight: 800; }
+.poetry-question-card { min-height: 510px; display: flex; flex-direction: column; align-items: stretch; padding: 34px 46px 30px; border: 1px solid #e0d7c9; border-radius: 31px; background: linear-gradient(150deg,#fffdf8,#f8f2e8); box-shadow: 0 23px 65px rgba(55,43,67,.12); }
+.poetry-question-kind { width: max-content; padding: 6px 11px; border-radius: 999px; color: #6a4382; background: #eee5f3; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.poetry-question-card h1 { max-width: 760px; margin: 15px auto 17px; text-align: center; font-size: clamp(25px,3vw,35px); line-height: 1.4; }
+.poetry-question-card blockquote { margin: 0 auto 27px; padding: 16px 29px; border-left: 3px solid #a96755; color: #473e49; background: #f5ead7; font-family: 'STKaiti','KaiTi',serif; font-size: clamp(20px,2.5vw,28px); line-height: 1.7; }
+.poetry-choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-top: auto; }
+.poetry-choice { min-height: 82px; display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #ddd4c8; border-radius: 18px; text-align: left; color: #403944; background: #fff; cursor: pointer; }
+.poetry-choice:hover:not(:disabled) { border-color: #9c84ad; background: #fbf8fd; }
+.poetry-choice > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; color: #6f547d; background: #eee8f1; font-weight: 900; }
+.poetry-choice > b { font-size: 13px; line-height: 1.6; }.poetry-choice > i { font-style: normal; font-size: 20px; font-weight: 900; }
+.poetry-choice--right { border-color: #75a688; color: #28563c; background: #edf7ee; }.poetry-choice--right > span { color: #fff; background: #4f8a68; }
+.poetry-choice--wrong { border-color: #d58e7e; color: #7d3d35; background: #faece8; }.poetry-choice--wrong > span { color: #fff; background: #bd6558; }
+.poetry-answer { display: grid; grid-template-columns: 45px 1fr auto; align-items: center; gap: 15px; margin-top: 18px; padding: 16px 18px; border: 1px solid #e0b29f; border-radius: 17px; background: #faede7; }
+.poetry-answer > span { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 13px; color: white; background: #b95d4d; font-size: 22px; font-weight: 900; }
+.poetry-answer strong { color: #6d3c34; }.poetry-answer p { margin: 4px 0 0; color: #705e59; font-size: 11px; line-height: 1.65; }
+.poetry-answer--right { border-color: #a5c7ae; background: #edf6ee; }.poetry-answer--right > span { background: #4b8966; }.poetry-answer--right strong { color: #315e45; }
+
+.poetry-result-hero { min-height: 300px; display: grid; place-content: center; justify-items: center; padding: 40px; border-radius: 33px; color: #fff9eb; text-align: center; background: radial-gradient(circle at 50% 0,rgba(255,224,145,.24),transparent 42%),linear-gradient(145deg,#2d4e49,#40334f 70%); box-shadow: 0 22px 58px rgba(50,43,60,.15); }
+.poetry-result-hero .eyebrow { color: #efd68d; }.poetry-result-hero h1 { margin: 8px 0 0; font-size: 94px; line-height: 1; }.poetry-result-hero h1 small { margin-left: 4px; font-size: 20px; }.poetry-result-hero > strong { margin-top: 12px; font-size: 21px; }.poetry-result-hero p { color: rgba(255,255,255,.68); }
+.poetry-result-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 20px; }
+.poetry-result-grid article { padding: 17px; border: 1px solid #e0d8ca; border-radius: 18px; background: #fffdf8; }.poetry-result-grid span { color: #796f78; font-size: 9px; font-weight: 800; }.poetry-result-grid strong { display: block; margin: 5px 0 10px; font-size: 22px; }.poetry-result-grid article > div { height: 6px; overflow: hidden; border-radius: 99px; background: #e7e0e8; }.poetry-result-grid i { display: block; height: 100%; border-radius: inherit; background: #6d8c72; }
+.poetry-wrong-list { margin-top: 22px; padding: 25px; border: 1px solid #e4d6c8; border-radius: 24px; background: #fffaf5; }.poetry-wrong-list h2 { margin: 5px 0 18px; }.poetry-wrong-list article { display: grid; grid-template-columns: 92px 150px 1fr; gap: 12px; align-items: center; padding: 13px 0; border-top: 1px solid #eadfd4; }.poetry-wrong-list article > span { width: max-content; padding: 5px 8px; border-radius: 99px; color: #8c4b3d; background: #f5e3dc; font-size: 9px; font-weight: 900; }.poetry-wrong-list article > strong { font-size: 12px; }.poetry-wrong-list article > p { margin: 0; color: #665e5b; font-size: 11px; line-height: 1.6; }
+.poetry-result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 22px; }
+
 @media (max-width: 780px) {
   .poem-heading-row { align-items: flex-start; flex-direction: column; gap: 10px; }
   .poem-audio-button { width: 100%; justify-content: center; }
+  .poetry-trainer-page { width: min(100% - 24px,680px); }
+  .poetry-trainer-hero { min-height: 430px; grid-template-columns: 1fr; gap: 22px; padding: 36px 28px; }.poetry-trainer-badge { width: 125px; height: 125px; justify-self: center; }.poetry-trainer-badge strong { font-size: 55px; }
+  .poetry-mode-grid { grid-template-columns: 1fr; }.poetry-mode-card { min-height: 205px; }
+  .poetry-quiz-screen { width: min(100% - 20px,680px); padding-top: 14px; }.poetry-quiz-top { grid-template-columns: auto 1fr; gap: 12px; }.poetry-quiz-top > small { display: none; }
+  .poetry-question-card { min-height: calc(100vh - 170px); padding: 28px 20px 24px; border-radius: 24px; }.poetry-choice-grid { grid-template-columns: 1fr; }.poetry-choice { min-height: 68px; }.poetry-answer { grid-template-columns: 42px 1fr; }.poetry-answer .primary-button { grid-column: 1 / -1; width: 100%; }
+  .poetry-result-grid { grid-template-columns: 1fr 1fr; }.poetry-wrong-list article { grid-template-columns: 1fr; gap: 6px; }.poetry-result-actions { display: grid; }.poetry-result-actions button { width: 100%; }
 }
