@@ -10,6 +10,8 @@ export type CloudStatus = {
   connected: boolean;
   updatedAt?: string;
   attempts?: number;
+  devices?: number;
+  activeInvites?: number;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -71,6 +73,6 @@ export async function leaveCloudFamily() {
   return api<{ connected: false }>('leave', { method: 'POST', body: '{}' });
 }
 
-export async function regenerateSyncCode(pin: string) {
-  return api<{ syncCode: string }>('code', { method: 'POST', body: JSON.stringify({ pin }) });
+export async function createDeviceInvite(pin: string) {
+  return api<{ syncCode: string; expiresAt: string; maxUses: number }>('code', { method: 'POST', body: JSON.stringify({ pin }) });
 }

@@ -5,7 +5,7 @@ import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSetting
 import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
 import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
 import { poemNarrationText, selectMandarinVoice } from './domain/poem-narration';
-import { createCloudFamily, getCloudStatus, joinCloudFamily, leaveCloudFamily, regenerateSyncCode, syncCloudState, type CloudSnapshot } from './sync';
+import { createCloudFamily, createDeviceInvite, getCloudStatus, joinCloudFamily, leaveCloudFamily, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
 type View = 'home' | 'scan' | 'review' | 'library' | 'poetry' | 'report';
@@ -18,7 +18,7 @@ type CloudActions = {
   join: (syncCode: string, pin: string) => Promise<void>;
   syncNow: () => Promise<void>;
   leave: () => Promise<void>;
-  regenerateCode: (pin: string) => Promise<string>;
+  createInvite: (pin: string) => Promise<string>;
 };
 
 const STATE_LABEL: Record<MasteryState, string> = {
@@ -218,7 +218,7 @@ export default function App() {
       await leaveCloudFamily();
       setCloud({ status: 'disconnected' });
     },
-    regenerateCode: async (pin) => (await regenerateSyncCode(pin)).syncCode
+    createInvite: async (pin) => (await createDeviceInvite(pin)).syncCode
   };
 
   async function switchChild(childId: string) {
@@ -851,24 +851,24 @@ function CloudSyncPanel({ cloud, actions }: { cloud: CloudUiState; actions: Clou
       {connected ? <div className="cloud-actions">
         <div className="cloud-last"><strong>✓ Kai、Lorik 的档案可跨设备使用</strong><small>{cloud.lastSyncAt ? `最近同步：${new Date(cloud.lastSyncAt).toLocaleString('zh-CN')}` : '正在准备第一次同步'}</small></div>
         <button onClick={() => void run(actions.syncNow)} disabled={busy || cloud.status === 'syncing'}>立即同步</button>
-        <button onClick={() => reset('code')}>让另一台设备加入</button>
+        <button onClick={() => reset('code')}>生成设备邀请码</button>
         <button className="quiet-button" onClick={() => void run(async () => { if (window.confirm('退出后，本机数据会保留，但不再自动同步。确定继续吗？')) { await actions.leave(); reset(); } })}>退出此设备</button>
       </div> : <div className="cloud-choice-grid">
         <button onClick={() => reset('create')}><span>☁</span><strong>开启家庭同步</strong><small>把这台设备上的现有数据作为家庭数据</small></button>
-        <button onClick={() => reset('join')}><span>↔</span><strong>加入已有家庭</strong><small>输入另一台设备生成的同步码</small></button>
+        <button onClick={() => reset('join')}><span>↔</span><strong>加入已有家庭</strong><small>输入另一台设备生成的邀请码</small></button>
       </div>}
     </>}
-    {mode === 'create' && !issuedCode && <div className="cloud-form"><h3>设置 6 位家长 PIN</h3><p>PIN 与高强度家庭同步码一起用于添加新设备。请勿使用生日或连续数字。</p><label>家长 PIN<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label><label>再次输入<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pinAgain} onChange={(event) => setPinAgain(event.target.value.replace(/\D/g, ''))} placeholder="再次确认" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => { if (pin.length !== 6) throw new Error('请输入 6 位家长 PIN'); if (pin !== pinAgain) throw new Error('两次 PIN 不一致'); setIssuedCode(await actions.create(pin)); })}>{busy ? '正在建立…' : '建立家庭空间'}</button></div></div>}
+    {mode === 'create' && !issuedCode && <div className="cloud-form"><h3>设置 6 位家长 PIN</h3><p>PIN 与高强度设备邀请码一起用于添加新设备。请勿使用生日或连续数字。</p><label>家长 PIN<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label><label>再次输入<input inputMode="numeric" autoComplete="new-password" maxLength={6} value={pinAgain} onChange={(event) => setPinAgain(event.target.value.replace(/\D/g, ''))} placeholder="再次确认" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => { if (pin.length !== 6) throw new Error('请输入 6 位家长 PIN'); if (pin !== pinAgain) throw new Error('两次 PIN 不一致'); setIssuedCode(await actions.create(pin)); })}>{busy ? '正在建立…' : '建立家庭空间'}</button></div></div>}
     {mode === 'create' && issuedCode && <SyncCodeCard code={issuedCode} onDone={() => reset()} />}
-    {mode === 'join' && <div className="cloud-form"><h3>加入已有家庭</h3><p>加入后会用家庭云端数据替换这台设备当前的默认档案；请先导出需要保留的本机备份。</p><label>家庭同步码<input autoCapitalize="characters" autoComplete="off" value={syncCode} onChange={(event) => setSyncCode(event.target.value.toUpperCase())} placeholder="ZIYOU-XXXX-XXXX-XXXX-XXXX" /></label><label>家长 PIN<input inputMode="numeric" autoComplete="current-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => { await actions.join(syncCode, pin); reset(); })}>{busy ? '正在加入…' : '加入并下载家庭数据'}</button></div></div>}
-    {mode === 'code' && !issuedCode && <div className="cloud-form"><h3>生成新的家庭同步码</h3><p>新同步码只用于添加设备；已连接的设备不会退出，旧同步码会立即失效。</p><label>家长 PIN<input inputMode="numeric" autoComplete="current-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => setIssuedCode(await actions.regenerateCode(pin)))}>{busy ? '正在生成…' : '生成新同步码'}</button></div></div>}
+    {mode === 'join' && <div className="cloud-form"><h3>加入已有家庭</h3><p>加入后会用家庭云端数据替换这台设备当前的默认档案；请先导出需要保留的本机备份。</p><label>设备邀请码<input autoCapitalize="characters" autoComplete="off" value={syncCode} onChange={(event) => setSyncCode(event.target.value.toUpperCase())} placeholder="ZIYOU-XXXX-XXXX-XXXX-XXXX" /></label><label>家长 PIN<input inputMode="numeric" autoComplete="current-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => { await actions.join(syncCode, pin); reset(); })}>{busy ? '正在加入…' : '加入并下载家庭数据'}</button></div></div>}
+    {mode === 'code' && !issuedCode && <div className="cloud-form"><h3>生成新的设备邀请码</h3><p>一个家庭可以同时保留多个有效邀请码；生成新码不会让旧码或已连接设备失效。</p><label>家长 PIN<input inputMode="numeric" autoComplete="current-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} placeholder="6 位数字" /></label>{error && <p className="cloud-error">{error}</p>}<div><button className="text-button" onClick={() => reset()}>返回</button><button className="primary-button" disabled={busy} onClick={() => void run(async () => setIssuedCode(await actions.createInvite(pin)))}>{busy ? '正在生成…' : '生成设备邀请码'}</button></div></div>}
     {mode === 'code' && issuedCode && <SyncCodeCard code={issuedCode} onDone={() => reset()} />}
   </section>;
 }
 
 function SyncCodeCard({ code, onDone }: { code: string; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
-  return <div className="sync-code-card"><span>家庭同步码</span><strong>{code}</strong><p>请把同步码和家长 PIN 分开保管。同步码只显示这一次；遗失后可在已连接设备上重新生成。</p><div><button onClick={() => void navigator.clipboard.writeText(code).then(() => setCopied(true))}>{copied ? '已复制' : '复制同步码'}</button><button className="primary-button" onClick={onDone}>我已妥善保存</button></div></div>;
+  return <div className="sync-code-card"><span>设备邀请码</span><strong>{code}</strong><p>邀请码 30 天内有效，最多可加入 8 台设备；家庭可以同时保留多个邀请码。请与家长 PIN 分开保管。</p><div><button onClick={() => void navigator.clipboard.writeText(code).then(() => setCopied(true))}>{copied ? '已复制' : '复制邀请码'}</button><button className="primary-button" onClick={onDone}>我已妥善保存</button></div></div>;
 }
 
 function Metric({ icon, tone, label, value, note }: { icon: string; tone: string; label: string; value: number; note: string }) {

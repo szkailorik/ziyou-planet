@@ -63,6 +63,9 @@ type FamilyRow = {
 const COOKIE_NAME = 'zp_session';
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const INVITE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const INVITE_MAX_USES = 8;
+const MAX_ACTIVE_INVITES = 12;
 
 export async function onRequest(context: Context): Promise<Response> {
   try {
@@ -91,8 +94,13 @@ export async function onRequest(context: Context): Promise<Response> {
 async function status({ request, env }: Context) {
   const session = await getSession(request, env, false);
   if (!session) return json({ connected: false });
-  const count = await env.ZIYOU_DB.prepare('SELECT COUNT(*) AS count FROM attempts WHERE family_id = ?').bind(session.id).first<{ count: number }>();
-  return json({ connected: true, updatedAt: session.settings_updated_at, attempts: Number(count?.count ?? 0) });
+  const now = new Date().toISOString();
+  const [attempts, devices, invites] = await Promise.all([
+    env.ZIYOU_DB.prepare('SELECT COUNT(*) AS count FROM attempts WHERE family_id = ?').bind(session.id).first<{ count: number }>(),
+    env.ZIYOU_DB.prepare('SELECT COUNT(*) AS count FROM devices WHERE family_id = ?').bind(session.id).first<{ count: number }>(),
+    env.ZIYOU_DB.prepare('SELECT COUNT(*) AS count FROM family_invites WHERE family_id = ? AND revoked_at IS NULL AND use_count < max_uses AND (expires_at IS NULL OR expires_at > ?)').bind(session.id, now).first<{ count: number }>()
+  ]);
+  return json({ connected: true, updatedAt: session.settings_updated_at, attempts: Number(attempts?.count ?? 0), devices: Number(devices?.count ?? 0), activeInvites: Number(invites?.count ?? 0) });
 }
 
 async function createFamily({ request, env }: Context) {
@@ -104,6 +112,8 @@ async function createFamily({ request, env }: Context) {
   const familyId = crypto.randomUUID();
   const deviceId = crypto.randomUUID();
   const syncCode = makeSyncCode();
+  const inviteId = crypto.randomUUID();
+  const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS).toISOString();
   const token = randomToken(32);
   const salt = randomToken(16);
   const [codeHash, tokenHash, pinHash] = await Promise.all([
@@ -116,7 +126,9 @@ async function createFamily({ request, env }: Context) {
     env.ZIYOU_DB.prepare('INSERT INTO families (id, sync_code_hash, pin_salt, pin_hash, settings_json, settings_updated_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(familyId, codeHash, salt, pinHash, JSON.stringify(backup.settings), settingsUpdatedAt, now, now),
     env.ZIYOU_DB.prepare('INSERT INTO devices (id, family_id, token_hash, label, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(deviceId, familyId, tokenHash, sanitizeLabel(body.deviceLabel), now, now)
+      .bind(deviceId, familyId, tokenHash, sanitizeLabel(body.deviceLabel), now, now),
+    env.ZIYOU_DB.prepare('INSERT INTO family_invites (id, family_id, code_hash, created_at, expires_at, max_uses, use_count, revoked_at) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)')
+      .bind(inviteId, familyId, codeHash, now, inviteExpiresAt, INVITE_MAX_USES)
   ]);
   await insertAttempts(env.ZIYOU_DB, familyId, backup.attempts, new Set(backup.settings.children.map((child) => child.id)));
   const state = await readState(env.ZIYOU_DB, { id: familyId, settings_json: JSON.stringify(backup.settings), settings_updated_at: settingsUpdatedAt });
@@ -127,16 +139,20 @@ async function joinFamily({ request, env }: Context) {
   const body = await readJson(request) as { syncCode?: unknown; pin?: unknown; deviceLabel?: unknown };
   const pin = validatePin(body.pin);
   const codeHash = await sha256(normalizeCode(String(body.syncCode ?? '')));
-  const family = await env.ZIYOU_DB.prepare('SELECT id, settings_json, settings_updated_at, pin_salt, pin_hash FROM families WHERE sync_code_hash = ?')
-    .bind(codeHash).first<FamilyRow>();
-  if (!family?.pin_salt || !family.pin_hash) throw new Error('AUTH:同步码或家长 PIN 不正确');
-  const candidate = await derivePin(pin, family.pin_salt);
-  if (!constantTimeEqual(candidate, family.pin_hash)) throw new Error('AUTH:同步码或家长 PIN 不正确');
-
   const now = new Date().toISOString();
+  const family = await env.ZIYOU_DB.prepare('SELECT f.id, f.settings_json, f.settings_updated_at, f.pin_salt, f.pin_hash, i.id AS invite_id FROM family_invites i JOIN families f ON f.id = i.family_id WHERE i.code_hash = ? AND i.revoked_at IS NULL AND i.use_count < i.max_uses AND (i.expires_at IS NULL OR i.expires_at > ?)')
+    .bind(codeHash, now).first<FamilyRow & { invite_id: string }>();
+  if (!family?.pin_salt || !family.pin_hash) throw new Error('AUTH:设备邀请码或家长 PIN 不正确');
+  const candidate = await derivePin(pin, family.pin_salt);
+  if (!constantTimeEqual(candidate, family.pin_hash)) throw new Error('AUTH:设备邀请码或家长 PIN 不正确');
+
   const token = randomToken(32);
-  await env.ZIYOU_DB.prepare('INSERT INTO devices (id, family_id, token_hash, label, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(crypto.randomUUID(), family.id, await sha256(token), sanitizeLabel(body.deviceLabel), now, now).run();
+  await env.ZIYOU_DB.batch([
+    env.ZIYOU_DB.prepare('INSERT INTO devices (id, family_id, token_hash, label, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), family.id, await sha256(token), sanitizeLabel(body.deviceLabel), now, now),
+    env.ZIYOU_DB.prepare('UPDATE family_invites SET use_count = use_count + 1 WHERE id = ? AND use_count < max_uses')
+      .bind(family.invite_id)
+  ]);
   return json({ connected: true, state: await readState(env.ZIYOU_DB, family) }, 200, sessionCookie(token));
 }
 
@@ -152,10 +168,18 @@ async function regenerateCode({ request, env }: Context) {
   const pin = validatePin(body.pin);
   const family = await env.ZIYOU_DB.prepare('SELECT pin_salt, pin_hash FROM families WHERE id = ?').bind(session.id).first<{ pin_salt: string; pin_hash: string }>();
   if (!family || !constantTimeEqual(await derivePin(pin, family.pin_salt), family.pin_hash)) throw new Error('AUTH:家长 PIN 不正确');
+  const now = new Date().toISOString();
+  const active = await env.ZIYOU_DB.prepare('SELECT COUNT(*) AS count FROM family_invites WHERE family_id = ? AND revoked_at IS NULL AND use_count < max_uses AND (expires_at IS NULL OR expires_at > ?)')
+    .bind(session.id, now).first<{ count: number }>();
+  if (Number(active?.count ?? 0) >= MAX_ACTIVE_INVITES) throw new Error('INPUT:有效设备邀请码已经达到 12 个，请先使用已有邀请码');
   const syncCode = makeSyncCode();
-  await env.ZIYOU_DB.prepare('UPDATE families SET sync_code_hash = ?, updated_at = ? WHERE id = ?')
-    .bind(await sha256(normalizeCode(syncCode)), new Date().toISOString(), session.id).run();
-  return json({ syncCode });
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS).toISOString();
+  await env.ZIYOU_DB.batch([
+    env.ZIYOU_DB.prepare('INSERT INTO family_invites (id, family_id, code_hash, created_at, expires_at, max_uses, use_count, revoked_at) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)')
+      .bind(crypto.randomUUID(), session.id, await sha256(normalizeCode(syncCode)), now, expiresAt, INVITE_MAX_USES),
+    env.ZIYOU_DB.prepare('UPDATE families SET updated_at = ? WHERE id = ?').bind(now, session.id)
+  ]);
+  return json({ syncCode, expiresAt, maxUses: INVITE_MAX_USES });
 }
 
 async function getState({ request, env }: Context) {
