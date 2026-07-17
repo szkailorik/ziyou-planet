@@ -23,7 +23,21 @@ describe('primary school poetry library', () => {
       expect(poem.authorProfile.identity.length).toBeGreaterThan(8);
       expect(poem.authorProfile.knownFor.length).toBeGreaterThan(8);
       expect(poem.authorProfile.memoryPoint.length).toBeGreaterThan(8);
+      expect(poem.learningGuide.glossary.length).toBeGreaterThanOrEqual(2);
+      expect(poem.learningGuide.glossary.length).toBeLessThanOrEqual(3);
+      for (const item of poem.learningGuide.glossary) {
+        expect(item.term.length).toBeGreaterThan(0);
+        expect(item.meaning.length).toBeGreaterThanOrEqual(3);
+      }
+      expect(poem.learningGuide.context.length).toBeGreaterThan(20);
+      expect(poem.learningGuide.readingHint.length).toBeGreaterThan(20);
     }
+  });
+
+  it('gives every poem a unique child-facing understanding guide', () => {
+    expect(new Set(PRIMARY_POEMS.map((poem) => poem.learningGuide)).size).toBe(75);
+    expect(PRIMARY_POEMS.find((poem) => poem.slug === 'jing-ye-si')?.learningGuide.glossary.map((item) => item.term)).toContain('疑');
+    expect(PRIMARY_POEMS.find((poem) => poem.slug === 'jiu-yue-jiu-ri-yi-shan-dong-xiong-di')?.learningGuide.context).toContain('不是今天的山东省');
   });
 
   it('reuses the reviewed first batch and assigns new assets to the poetry gallery', () => {

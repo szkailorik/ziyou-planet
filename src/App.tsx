@@ -635,7 +635,7 @@ function PoetryLibrary() {
     const normalized = query.trim().toLowerCase();
     const selectedEra = POETRY_ERAS.find((item) => item.value === era)!;
     return PRIMARY_POEMS.filter((poem) => {
-      const haystack = [poem.title, poem.author, poem.dynasty, ...poem.lines, poem.interpretation, poem.mood].join(' ').toLowerCase();
+      const haystack = [poem.title, poem.author, poem.dynasty, ...poem.lines, poem.interpretation, poem.mood, poem.learningGuide.context, poem.learningGuide.readingHint, ...poem.learningGuide.glossary.flatMap((item) => [item.term, item.meaning])].join(' ').toLowerCase();
       return selectedEra.match(poem) && (!normalized || haystack.includes(normalized));
     });
   }, [era, query]);
@@ -671,6 +671,14 @@ function PoetryLibrary() {
         </div>
       </section>
       <div className="poem-dialog-details">
+        <section className="poem-learning-card" aria-label={`${selected.title}儿童理解卡`}>
+          <header><span aria-hidden="true">懂</span><div><strong>三步读懂这首诗</strong><small>先扫清古词，再认识人物地点，最后抓住诗里的关键变化。</small></div></header>
+          <div className="poem-learning-grid">
+            <section className="poem-glossary"><h3><b>1</b> 关键词是什么意思？</h3><dl>{selected.learningGuide.glossary.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.meaning}</dd></div>)}</dl></section>
+            <section><h3><b>2</b> 人物和地点线索</h3><p>{selected.learningGuide.context}</p></section>
+            <section><h3><b>3</b> 读诗时抓住什么？</h3><p>{selected.learningGuide.readingHint}</p></section>
+          </div>
+        </section>
         <section className="poem-author-card"><span aria-hidden="true">{selected.authorProfile.kind === '作者' ? '人' : '源'}</span><div><strong>{selected.authorProfile.kind === '作者' ? `认识作者 · ${selected.author}` : `认识作品来源 · ${selected.author}`}</strong><p>{selected.authorProfile.identity}</p><p>{selected.authorProfile.knownFor}</p><small>{selected.authorProfile.memoryPoint}</small></div></section>
         <dl className="poem-research"><div><dt>诗的气质</dt><dd>{selected.mood}</dd></div><div><dt>时代与考据边界</dt><dd>{selected.historicalContext}</dd></div><div><dt>画面为什么这样画</dt><dd>{selected.visualBasis}</dd></div></dl>
         <section className="poem-characters"><strong>诗中可以认一认</strong><div>{poemCharacters.map((char) => <span key={char}>{char}</span>)}</div><small>这里只做语境提示，不作为“已经认识”的证据。</small></section>
