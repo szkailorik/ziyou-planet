@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
 import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
-import { confidenceToResult, isDue, progressFromAttempts } from './domain/mastery';
+import { confidenceToResult, progressFromAttempts } from './domain/mastery';
 import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
 import { poemNarrationText, selectMandarinVoice } from './domain/poem-narration';
+import { makeContextChoices, makeContextPrompt, makePinyinChoices, reviewCandidateIds, reviewModeFor, type ObjectiveReviewMode } from './domain/review';
 import { createCloudFamily, createDeviceInvite, getCloudStatus, joinCloudFamily, leaveCloudFamily, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
@@ -142,7 +143,7 @@ export default function App() {
       scanned: values.length,
       stable: values.filter((item) => item.state === 'stable').length,
       basic: values.filter((item) => item.state === 'basic').length,
-      due: values.filter((item) => isDue(item)).length,
+      due: values.filter((item) => item.state === 'due').length,
       sure: currentSelfChecks.filter((item) => item.confidence === 'sure').length,
       unsure: currentSelfChecks.filter((item) => item.confidence === 'unsure').length,
       teach: currentSelfChecks.filter((item) => item.confidence === 'teach-me').length
@@ -292,15 +293,17 @@ function NavButton({ active, icon, label, onClick, badge = 0 }: { active: boolea
 
 function Home({ settings, stats, progress, onNavigate }: { settings: ChildSession; stats: ReturnType<typeof statsShape>; progress: ReturnType<typeof progressFromAttempts>; onNavigate: (view: View) => void }) {
   const forming = [...progress.values()].filter((item) => ['introduced', 'forming', 'due'].includes(item.state)).length;
+  const reviewCount = reviewCandidateIds(progress, CHARACTERS).length;
+  const hasReview = reviewCount > 0;
   return (
     <div className="page home-page">
       <section className="hero-card">
         <div className="hero-copy">
           <div className="eyebrow">你好，{settings.nickname} <span>✦</span></div>
-          <h1>今天，完成一个<br /><em>{stats.due ? '到期复习任务' : '短短识字任务'}</em></h1>
+          <h1>今天，完成一个<br /><em>{hasReview ? '精准复习任务' : '短短识字任务'}</em></h1>
           <p>先看字、再回想，答完才揭晓读音和生活里的线索。每一次认真回忆，都在让记忆更牢。</p>
           <div className="hero-actions">
-            <button className="primary-button" onClick={() => onNavigate(stats.scanned ? 'review' : 'scan')}>{stats.scanned ? '开始今日复习' : '开始识字扫描'} <span>→</span></button>
+            <button className="primary-button" onClick={() => onNavigate(hasReview ? 'review' : 'scan')}>{hasReview ? `复习 ${reviewCount} 个薄弱字` : '继续识字定位'} <span>→</span></button>
             <button className="text-button" onClick={() => onNavigate('scan')}>做一次快速扫描</button>
           </div>
         </div>
@@ -322,7 +325,7 @@ function Home({ settings, stats, progress, onNavigate }: { settings: ChildSessio
       <div className="section-heading"><div><span className="eyebrow">今天的路线</span><h2>选一个短任务出发</h2></div><p>建议每天 {settings.dailyMinutes} 分钟</p></div>
       <section className="task-grid">
         <TaskCard tone="purple" icon="◎" kicker="分层抽样定位" title="识字雷达" text="跨难度抽取代表字，跳过已经会的，尽快找到真正薄弱的范围。" meta="每轮约 3-5 分钟" action="开始定位" onClick={() => onNavigate('scan')} />
-        <TaskCard tone="green" icon="↻" kicker="到期优先" title="复习乐园" text={stats.due ? `有 ${stats.due} 个字到时间再见面了，听音、辨形、选读音。` : '今天没有到期字，也可以从最近见过的字里来一轮小挑战。'} meta="约 3-5 分钟" action="去复习" onClick={() => onNavigate('review')} />
+        <TaskCard tone="green" icon="↻" kicker={hasReview ? '缺什么就练什么' : '等待定位结果'} title="复习乐园" text={hasReview ? `${reviewCount} 个字准备好了：先辨读音，再放进生活词句里认，补齐真正掌握所缺的证据。` : '目前没有可判分的薄弱字。先做一次识字雷达，系统会把真正值得练的字送到这里。'} meta={hasReview ? '约 3-5 分钟' : '不会进入空任务'} action={hasReview ? '去复习' : '先去定位'} onClick={() => onNavigate(hasReview ? 'review' : 'scan')} />
         <TaskCard tone="orange" icon="▦" kicker="汉字收藏册" title="我的字册" text="按学习状态查找汉字，看看读音、词语和已经留下的证据。" meta={`${stats.scanned} 字已有记录`} action="打开字册" onClick={() => onNavigate('library')} />
       </section>
 
@@ -409,7 +412,8 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
 
   if (session.index >= session.ids.length) {
     const updatedEstimate = estimateLiteracy(CHARACTERS, attempts);
-    return <div className="page narrow-page"><div className="completion-card"><div className="completion-orbit">✦</div><span className="eyebrow">{session.kind === 'weakness' ? '薄弱字检查完成' : '定位完成'}</span><h1>你认真看了 {session.size} 个字</h1><p>{session.kind === 'weakness' ? '真正薄弱的字会更早进入复习，不需要重复练已经熟悉的字。' : updatedEstimate.sampleSize >= 24 ? `当前熟悉度大约落在 ${updatedEstimate.lower}—${updatedEstimate.upper} 字；继续分层抽样会让范围更可靠。` : '样本还比较少，再完成一轮快速定位就能看到初步范围。'}</p><div className="completion-stats"><div><strong>{sessionCounts.sure}</strong><small>我会读</small></div><div><strong>{sessionCounts.unsure}</strong><small>不确定</small></div><div><strong>{sessionCounts.teach}</strong><small>请教我</small></div></div><button className="primary-button" onClick={() => { onFocusChange(false); setSession(null); }}>{session.kind === 'weakness' ? '查看新的薄弱队列' : '继续缩小范围'} →</button><button className="text-button" onClick={onFinish}>先回到今天</button></div></div>;
+    const needsPractice = sessionCounts.unsure + sessionCounts.teach;
+    return <div className="page narrow-page"><div className="completion-card"><div className="completion-orbit">✦</div><span className="eyebrow">{session.kind === 'weakness' ? '薄弱字检查完成' : '定位完成'}</span><h1>找到 {needsPractice} 个值得练的字</h1><p>{sessionCounts.sure ? `已经会读的 ${sessionCounts.sure} 个字直接跳过，不浪费练习时间。` : ''}{session.kind === 'weakness' ? '真正薄弱的字会更早进入复习。' : updatedEstimate.sampleSize >= 24 ? `当前熟悉度大约落在 ${updatedEstimate.lower}—${updatedEstimate.upper} 字；继续分层抽样会让范围更可靠。` : '再完成一轮快速定位，就能看到更可靠的识字范围。'}</p><div className="completion-stats"><div><strong>{sessionCounts.sure}</strong><small>已会 · 跳过</small></div><div><strong>{sessionCounts.unsure}</strong><small>还需确认</small></div><div><strong>{sessionCounts.teach}</strong><small>优先学习</small></div></div><button className="primary-button" onClick={() => { onFocusChange(false); setSession(null); }}>{session.kind === 'weakness' ? '查看新的薄弱队列' : '继续缩小范围'} →</button><button className="text-button" onClick={onFinish}>先回到今天</button></div></div>;
   }
 
   const entry = CHARACTER_BY_ID.get(session.ids[session.index])!;
@@ -489,17 +493,23 @@ function Feedback({ entry, confidence, settings }: { entry: CharacterEntry; conf
 }
 
 function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { settings: ChildSession; attempts: AttemptEvent[]; progress: ReturnType<typeof progressFromAttempts>; addAttempt: (event: AttemptEvent) => Promise<void>; onFocusChange: (active: boolean) => void }) {
-  const candidateIds = useMemo(() => {
-    const ids = [...progress.values()].filter((item) => item.state !== 'stable' || isDue(item)).sort((a, b) => (a.nextReviewAt ?? '').localeCompare(b.nextReviewAt ?? '')).map((item) => item.characterId);
-    return ids.filter((id) => CHARACTER_BY_ID.get(id)?.contentStatus === 'reviewed').slice(0, 12);
-  }, [progress]);
+  const candidateIds = useMemo(() => reviewCandidateIds(progress, CHARACTERS), [progress]);
   const [active, setActive] = useState(false);
   const [queueIds, setQueueIds] = useState<number[]>([]);
   const [index, setIndex] = useState(0);
   const [choice, setChoice] = useState<string | null>(null);
+  const [taskMode, setTaskMode] = useState<ObjectiveReviewMode>('pronunciation-choice');
   const [correctCount, setCorrectCount] = useState(0);
   const started = useRef(Date.now());
   const reviewLock = useRef(false);
+  const autoNextTimer = useRef<number | null>(null);
+
+  function clearAutoNext() {
+    if (autoNextTimer.current !== null) window.clearTimeout(autoNextTimer.current);
+    autoNextTimer.current = null;
+  }
+
+  useEffect(() => () => clearAutoNext(), []);
 
   useEffect(() => {
     if (!active) return;
@@ -515,7 +525,8 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
       const optionIndex = Number(event.key) - 1;
       if (optionIndex < 0 || optionIndex > 3) return;
       const currentEntry = CHARACTER_BY_ID.get(queueIds[index]);
-      const option = currentEntry ? makePinyinChoices(currentEntry)[optionIndex] : undefined;
+      const options = currentEntry ? (taskMode === 'context-choice' ? makeContextChoices(CHARACTERS, currentEntry) : makePinyinChoices(CHARACTERS, currentEntry)) : [];
+      const option = options[optionIndex];
       if (option) void choose(option);
     };
     window.addEventListener('keydown', onKey);
@@ -523,8 +534,8 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
   });
 
   if (!active) {
-    return <div className="page narrow-page"><PageIntro eyebrow="复习乐园" title="在快要忘记时，再见一次" text="这里优先安排“不确定、请教我”和到期的字。小挑战使用客观读音选择，为掌握度增加一条新证据。" />
-      <div className="review-preview"><div className="review-stack">{candidateIds.slice(0, 4).map((id, i) => <span key={id} style={{ transform: `translate(${i * 12}px, ${i * 7}px) rotate(${i * 2 - 3}deg)` }}>{CHARACTER_BY_ID.get(id)?.char}</span>)}</div><div><span className="eyebrow">今日队列</span><h2>{candidateIds.length ? `${candidateIds.length} 个字准备好了` : '还没有可复习的审核字'}</h2><p>{candidateIds.length ? '每题只选读音；答完立即反馈，不设倒计时。' : '先完成一轮熟悉度扫描；只有读音内容已审核的字才会进入客观题。'}</p><button className="primary-button" disabled={!candidateIds.length} onClick={() => { setQueueIds([...candidateIds]); setActive(true); setIndex(0); reviewLock.current = false; onFocusChange(true); started.current = Date.now(); }}>{candidateIds.length ? '开始小挑战' : '暂无任务'} →</button></div></div>
+    return <div className="page narrow-page"><PageIntro eyebrow="复习乐园" title="缺哪条证据，就练哪一种认字" text="先确认能从字形想起读音，再换到生活词句中认出；系统只安排还没真正稳定的字。" />
+      <div className="review-preview"><div className="review-stack">{candidateIds.slice(0, 4).map((id, i) => <span key={id} style={{ transform: `translate(${i * 12}px, ${i * 7}px) rotate(${i * 2 - 3}deg)` }}>{CHARACTER_BY_ID.get(id)?.char}</span>)}</div><div><span className="eyebrow">今日队列</span><h2>{candidateIds.length ? `${candidateIds.length} 个字准备好了` : '还没有可复习的审核字'}</h2><p>{candidateIds.length ? '读音题和词句填空会按掌握证据自动切换；答对后自动进入下一题。' : '先完成一轮熟悉度扫描；只有词句与读音内容已审核的字才会进入客观题。'}</p><button className="primary-button" disabled={!candidateIds.length} onClick={() => { const ids = [...candidateIds]; setQueueIds(ids); setActive(true); setIndex(0); setTaskMode(reviewModeFor(ids[0], attempts)); reviewLock.current = false; onFocusChange(true); started.current = Date.now(); }}>{candidateIds.length ? '开始小挑战' : '暂无任务'} →</button></div></div>
       <div className="explain-card"><span>为什么要隔一段时间再测？</span><p>刚看过答案时答对，不一定已经记住。稍微隔开，再主动从记忆里取出来，才能提供更有价值的学习证据。</p></div>
     </div>;
   }
@@ -534,48 +545,44 @@ function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { s
   }
 
   const entry = CHARACTER_BY_ID.get(queueIds[index])!;
-  const choices = makePinyinChoices(entry);
+  const choices = taskMode === 'context-choice' ? makeContextChoices(CHARACTERS, entry) : makePinyinChoices(CHARACTERS, entry);
+  const correctValue = taskMode === 'context-choice' ? entry.char : entry.pinyin;
+  const contextPrompt = taskMode === 'context-choice' ? makeContextPrompt(entry) : '';
   const answered = choice !== null;
-  const correct = choice === entry.pinyin;
+  const correct = choice === correctValue;
 
   async function choose(value: string) {
     if (answered || reviewLock.current) return;
     reviewLock.current = true;
     setChoice(value);
-    const isCorrect = value === entry.pinyin;
+    const isCorrect = value === correctValue;
     if (isCorrect) setCorrectCount((count) => count + 1);
     try {
-      await addAttempt(makeAttempt(settings, entry, 'pronunciation-choice', isCorrect ? 'correct' : 'incorrect', Date.now() - started.current));
+      await addAttempt(makeAttempt(settings, entry, taskMode, isCorrect ? 'correct' : 'incorrect', Date.now() - started.current));
     } catch {
       reviewLock.current = false;
       setChoice(null);
       return;
     }
     reviewLock.current = false;
+    if (isCorrect) autoNextTimer.current = window.setTimeout(next, 1250);
   }
 
   function next() {
     if (reviewLock.current) return;
+    clearAutoNext();
     reviewLock.current = false;
     setChoice(null);
     setIndex((current) => {
-      if (current + 1 >= queueIds.length) onFocusChange(false);
-      return current + 1;
+      const nextIndex = current + 1;
+      if (nextIndex >= queueIds.length) onFocusChange(false);
+      else setTaskMode(reviewModeFor(queueIds[nextIndex], attempts));
+      return nextIndex;
     });
     started.current = Date.now();
   }
 
-    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">选出这个字的读音 · 键盘 1—4</span></div><div className="quiz-card"><CharacterGlyph entry={entry} small /><div className="pinyin-choices">{choices.map((value, optionIndex) => <button disabled={answered} aria-keyshortcuts={String(optionIndex + 1)} aria-label={answered && value === entry.pinyin ? `${value}，正确答案` : value} key={value} className={answered ? value === entry.pinyin ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === entry.pinyin ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? '答对了！' : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button><button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>下一题（Enter）→</button></div>}</div></div>;
-}
-
-function makePinyinChoices(entry: CharacterEntry) {
-  const index = CHARACTERS.indexOf(entry);
-  const candidates = [entry.pinyin];
-  for (let offset = 1; candidates.length < 4 && offset < 40; offset += 1) {
-    const value = CHARACTERS[(index + offset * 7) % CHARACTERS.length].pinyin;
-    if (!candidates.includes(value)) candidates.push(value);
-  }
-  return candidates.map((value) => ({ value, sort: value === entry.pinyin ? (entry.id % 4) : ((entry.id + value.codePointAt(0)!) % 7) })).sort((a, b) => a.sort - b.sort).map((item) => item.value);
+    return <div className="focus-page review-focus"><div className="focus-top"><button className="quiet-button" onClick={() => { clearAutoNext(); setActive(false); setQueueIds([]); onFocusChange(false); }}>← 暂停</button><div className="focus-progress"><span><b>{index + 1}</b> / {queueIds.length}</span><div><i style={{ width: `${(index / queueIds.length) * 100}%` }} /></div></div><span className="focus-hint">{taskMode === 'context-choice' ? '把合适的字放回句子 · 键盘 1—4' : '选出这个字的读音 · 键盘 1—4'}</span></div><div className={`quiz-card ${taskMode === 'context-choice' ? 'quiz-card--context' : ''}`}>{taskMode === 'context-choice' ? <div className="context-mission" aria-label="词句小侦探：先读完整句子，再选择合适的字"><span aria-hidden="true">句</span><strong>词句小侦探</strong><p>先读完整句子，再看哪个字放进去最合适。答案会在作答后揭晓。</p></div> : <CharacterGlyph entry={entry} small />}<div className="quiz-question"><span className="quiz-question-label">{taskMode === 'context-choice' ? '哪个字放进去最合适？' : '这个字怎么读？'}</span>{taskMode === 'context-choice' && <p className="context-question"><span>{contextPrompt.split('＿').map((part, partIndex, all) => <span key={`${part}-${partIndex}`}>{part}{partIndex < all.length - 1 && <b>＿</b>}</span>)}</span></p>}<div className="pinyin-choices">{choices.map((value, optionIndex) => <button disabled={answered} aria-keyshortcuts={String(optionIndex + 1)} aria-label={answered && value === correctValue ? `${value}，正确答案` : value} key={value} className={answered ? value === correctValue ? 'choice choice--right' : value === choice ? 'choice choice--wrong' : 'choice' : 'choice'} onClick={() => void choose(value)}>{value}{answered && value === correctValue ? ' ✓' : answered && value === choice ? ' ×' : ''}</button>)}</div></div>{answered && <div role="status" aria-live="polite" className={correct ? 'quiz-feedback quiz-feedback--right' : 'quiz-feedback'}><strong>{correct ? (taskMode === 'context-choice' ? '认出来了，放回句子正合适！' : '读音认对了！') : taskMode === 'context-choice' ? `差一点，句子里应该放“${entry.char}”` : `差一点，它读 ${entry.pinyin}`}</strong><ContextBridge entry={entry} compact showEnglish={settings.englishBridge} /><button className="sound-button" onClick={() => speak(entry.char, settings.sound)}>♪ 再听一遍</button>{correct ? <small className="auto-next-note">马上自动进入下一题…</small> : <button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>继续下一题（Enter）→</button>}</div>}</div></div>;
 }
 
 function Library({ progress, showEnglish }: { progress: ReturnType<typeof progressFromAttempts>; showEnglish: boolean }) {

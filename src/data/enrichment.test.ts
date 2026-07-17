@@ -26,6 +26,12 @@ describe('character catalog', () => {
     expect(one.idiom?.example).toContain('积木');
   });
 
+  it('keeps every objectively reviewed character inside its practice sentence', () => {
+    const reviewed = CHARACTERS.filter((entry) => entry.contentStatus === 'reviewed');
+    expect(reviewed.length).toBeGreaterThan(40);
+    expect(reviewed.every((entry) => entry.example.includes(entry.char))).toBe(true);
+  });
+
   it('keeps research boundaries on every classic and publishes only the reviewed image batch', () => {
     const classics = new Map(
       CHARACTERS.flatMap((entry) => entry.classic ? [[entry.classic.title, entry.classic] as const] : [])

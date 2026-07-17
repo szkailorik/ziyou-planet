@@ -1,0 +1,85 @@
+.quiz-question {
+  display: grid;
+  gap: 12px;
+  align-self: stretch;
+}
+
+.quiz-question-label {
+  color: var(--purple-dark);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.context-question {
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 20px 22px;
+  border: 1px solid #e2dcf2;
+  border-radius: 20px;
+  background: linear-gradient(145deg,#fbfaff,#f4f0ff);
+  color: var(--ink);
+  font-family: 'Noto Serif SC','Songti SC',serif;
+  font-size: clamp(21px,2.4vw,29px);
+  line-height: 1.75;
+  text-align: center;
+}
+
+.context-question b {
+  min-width: 1.3em;
+  display: inline-block;
+  color: var(--purple-dark);
+  border-bottom: 3px solid #9f8de7;
+}
+
+.quiz-card--context .choice {
+  font-family: 'KaiTi','STKaiti',serif;
+  font-size: 38px;
+}
+
+.context-mission {
+  min-height: 320px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 30px;
+  border: 1px solid #dfd8ee;
+  border-radius: 25px;
+  background: radial-gradient(circle at 50% 35%,#fffdf5,#f4f0ff 72%);
+  text-align: center;
+}
+
+.context-mission > span {
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg,#7b68cf,#9c8dea);
+  box-shadow: 0 15px 30px rgba(96,75,181,.2);
+  font-family: 'KaiTi','STKaiti',serif;
+  font-size: 60px;
+}
+
+.context-mission strong { color: var(--purple-dark); font-size: 22px; }
+.context-mission p { max-width: 230px; margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+.auto-next-note {
+  display: inline-block;
+  margin: 11px 0 0;
+  color: #39753a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@media (max-width: 780px) {
+  .context-question { min-height: 92px; padding: 15px; font-size: 21px; }
+  .quiz-card--context .choice { min-height: 72px; font-size: 32px; }
+  .context-mission { min-height: 155px; padding: 20px; }
+  .context-mission > span { width: 66px; height: 66px; margin-bottom: 10px; font-size: 36px; }
+  .context-mission p { max-width: 380px; margin-top: 5px; }
+}
