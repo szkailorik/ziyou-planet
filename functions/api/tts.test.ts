@@ -21,6 +21,8 @@ describe('Qwen3-TTS proxy input', () => {
     expect(payload.input.voice).toBe('Cherry');
     expect(payload.input.language_type).toBe('Chinese');
     expect(payload.input.instructions).toContain('标准的普通话');
+    expect(payload.input.instructions).toContain('shuǐ');
+    expect(payload.input.instructions).toContain('不要读出拼音');
   });
 
   it('builds a stable same-origin GET key for edge audio reuse', () => {

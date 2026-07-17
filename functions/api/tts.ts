@@ -1,4 +1,4 @@
-import { CURRICULUM_CHARACTERS } from '../../src/data/curriculum-characters';
+import { CURRICULUM_CHARACTERS, CURRICULUM_PINYIN } from '../../src/data/curriculum-characters';
 import { PRIMARY_POEM_SPEECH } from '../../src/data/primary-poem-speech';
 
 type Env = {
@@ -13,16 +13,21 @@ const MODEL = 'qwen3-tts-instruct-flash';
 const VOICE = 'Cherry';
 const CACHE_VERSION = 'v1';
 const CACHE_MAX_AGE = 60 * 60 * 24 * 30;
-const CHARACTER_INSTRUCTIONS = '请用清晰、自然、标准的普通话，像耐心的小学语文老师一样，只读给出的汉字，不添加任何内容。单字读音略慢，发音完整准确。';
 const POEM_INSTRUCTIONS = '请用自然、温暖、标准的普通话朗读古诗。语速舒缓，标题、朝代、作者和诗句之间停顿清楚；语气含蓄克制，贴合诗意，不添加任何内容。';
+
+export function characterInstructions(character: string, pinyin: string) {
+  return `请把汉字“${character}”读作“${pinyin}”，只朗读这个汉字一遍，不要读出拼音或任何解释。发音清晰、自然、使用标准的普通话。`;
+}
 
 export function resolveSpeechInput(input: unknown) {
   if (!input || typeof input !== 'object') throw new Error('请求格式不正确');
   const value = input as Partial<SpeechInput>;
   if (value.kind === 'character') {
     const character = String(value.character ?? '').trim();
-    if ([...character].length !== 1 || !CURRICULUM_CHARACTERS.includes(character)) throw new Error('汉字不在课程字库中');
-    return { kind: 'character' as const, id: character, text: character, instructions: CHARACTER_INSTRUCTIONS };
+    const index = CURRICULUM_CHARACTERS.indexOf(character);
+    if ([...character].length !== 1 || index < 0) throw new Error('汉字不在课程字库中');
+    const pinyin = CURRICULUM_PINYIN[index];
+    return { kind: 'character' as const, id: `${index + 1}`, text: character, instructions: characterInstructions(character, pinyin) };
   }
   if (value.kind === 'poem') {
     const slug = String(value.slug ?? '').trim();

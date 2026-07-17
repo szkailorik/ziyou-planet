@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { selectMandarinVoice } from './domain/poem-narration';
+import { prebuiltSpeechUrl, type PrebuiltSpeechRequest } from './domain/prebuilt-speech';
 
-export type QwenSpeechRequest =
-  | { kind: 'character'; character: string }
-  | { kind: 'poem'; slug: string };
+export type QwenSpeechRequest = PrebuiltSpeechRequest;
 
 type Status = 'preparing' | 'ready' | 'playing' | 'fallback';
 
@@ -20,17 +19,7 @@ async function prepareQwenSpeech(request: QwenSpeechRequest) {
   const key = requestKey(request);
   const existing = audioCache.get(key);
   if (existing) return existing;
-  const pending = fetch('/api/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
-  }).then(async (response) => {
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({})) as { error?: string };
-      throw new Error(detail.error ?? 'Qwen3-TTS 暂时不可用');
-    }
-    return URL.createObjectURL(await response.blob());
-  }).catch((error) => {
+  const pending = prepareSpeechBlob(request).catch((error) => {
     audioCache.delete(key);
     throw error;
   });
@@ -44,6 +33,24 @@ async function prepareQwenSpeech(request: QwenSpeechRequest) {
     }
   }
   return pending;
+}
+
+async function prepareSpeechBlob(request: QwenSpeechRequest) {
+  const staticUrl = prebuiltSpeechUrl(request);
+  if (staticUrl) {
+    const staticResponse = await fetch(staticUrl, { cache: 'force-cache' });
+    if (staticResponse.ok) return URL.createObjectURL(await staticResponse.blob());
+  }
+  const response = await fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(detail.error ?? 'Qwen3-TTS 暂时不可用');
+  }
+  return URL.createObjectURL(await response.blob());
 }
 
 export function stopQwenSpeech(key?: string) {
@@ -145,5 +152,5 @@ export default function QwenSpeechButton({
   }
 
   const label = !enabled ? '声音已关闭' : status === 'preparing' ? preparingLabel : status === 'playing' ? playingLabel : readyLabel;
-  return <button type="button" disabled={!enabled || status === 'preparing'} className={`${className} ${status === 'playing' ? 'is-playing' : ''}`} aria-label={ariaLabel} aria-pressed={status === 'playing'} title="阿里云 Qwen3-TTS 标准普通话；网络不可用时自动使用设备语音" onClick={() => void toggle()}><span aria-hidden="true">{status === 'playing' ? '■' : status === 'preparing' ? '◌' : '♪'}</span>{label}</button>;
+  return <button type="button" disabled={!enabled || status === 'preparing'} className={`${className} ${status === 'playing' ? 'is-playing' : ''}`} aria-label={ariaLabel} aria-pressed={status === 'playing'} title="预生成的阿里云 Qwen3-TTS 标准普通话；缺失时自动在线补充" onClick={() => void toggle()}><span aria-hidden="true">{status === 'playing' ? '■' : status === 'preparing' ? '◌' : '♪'}</span>{label}</button>;
 }

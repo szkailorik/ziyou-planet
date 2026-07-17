@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "generate:data": "node scripts/generate-characters.mjs",
+    "generate:speech": "vite-node scripts/generate-prebuilt-speech.ts",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "preview": "vite preview",
