@@ -182,6 +182,14 @@ main { flex: 1; }
 .poem-meaning strong { display: block; margin-bottom: 5px; }
 .poem-meaning p { margin: 0; color: #625d64; line-height: 1.7; }
 .poem-dialog-details { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; padding: 20px 24px 25px; }
+.poem-exam-card { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(220px,.62fr) minmax(0,1.38fr); overflow: hidden; border: 1px solid #e2c9bb; border-radius: 20px; background: #fffaf6; box-shadow: 0 9px 25px rgba(92,52,33,.055); }
+.poem-exam-card > header { display: flex; align-items: center; gap: 13px; padding: 18px 20px; background: linear-gradient(120deg,#f6dfd5,#fbefe6); }
+.poem-exam-card > header > span { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 13px; color: #fffaf0; background: #a44e38; font-family: 'STKaiti','KaiTi',serif; font-size: 22px; }
+.poem-exam-card > header strong { display: block; color: #613728; font-size: 15px; }
+.poem-exam-card > header small { display: block; margin-top: 4px; color: #846e63; font-size: 9px; line-height: 1.5; }
+.poem-exam-card > div { display: grid; grid-template-columns: 1fr 1fr; }
+.poem-exam-card p { display: grid; align-content: center; gap: 7px; margin: 0; padding: 17px 19px; color: #5d5551; font-size: 11px; line-height: 1.72; border-left: 1px solid #eadbd2; }
+.poem-exam-card p b { width: max-content; padding: 4px 8px; border-radius: 999px; color: #8e4937; background: #f8e7df; font-size: 9px; }
 .poem-learning-card { grid-column: 1 / -1; overflow: hidden; border: 1px solid #dbcda9; border-radius: 20px; background: #fffdf5; box-shadow: 0 9px 25px rgba(92,66,33,.06); }
 .poem-learning-card > header { display: flex; align-items: center; gap: 13px; padding: 17px 20px; border-bottom: 1px solid #eadfc4; background: linear-gradient(100deg,#f6e8bd,#fbf5e4); }
 .poem-learning-card > header > span { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 13px; color: #fffaf0; background: #9b593d; font-family: 'STKaiti','KaiTi',serif; font-size: 22px; }
@@ -228,11 +236,19 @@ main { flex: 1; }
   .poem-dialog-image { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
   .poem-dialog-copy { padding: 34px 34px 38px; }
   .poem-dialog-details { grid-template-columns: 1fr; padding: 17px 18px 20px; }
+  .poem-exam-card { grid-column: auto; grid-template-columns: 1fr; }
+  .poem-exam-card > div { border-top: 1px solid #eadbd2; }
   .poem-learning-card { grid-column: auto; }
   .poem-learning-grid { grid-template-columns: 1fr; }
   .poem-learning-grid > section { border-left: 0; border-top: 1px solid #ece2cf; }
   .poem-learning-grid > section:first-child { border-top: 0; }
   .poem-characters { grid-column: auto; }
+}
+
+@media (max-width: 560px) {
+  .poem-exam-card > div { grid-template-columns: 1fr; }
+  .poem-exam-card p { border-left: 0; border-top: 1px solid #eadbd2; }
+  .poem-exam-card p:first-child { border-top: 0; }
 }
 
 @media (max-width: 780px) {

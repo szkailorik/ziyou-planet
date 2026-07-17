@@ -31,6 +31,8 @@ describe('primary school poetry library', () => {
       }
       expect(poem.learningGuide.context.length).toBeGreaterThan(20);
       expect(poem.learningGuide.readingHint.length).toBeGreaterThan(20);
+      expect(poem.examPoint.focus.length).toBeGreaterThan(20);
+      expect(poem.examPoint.pitfall.length).toBeGreaterThan(12);
     }
   });
 
@@ -38,6 +40,13 @@ describe('primary school poetry library', () => {
     expect(new Set(PRIMARY_POEMS.map((poem) => poem.learningGuide)).size).toBe(75);
     expect(PRIMARY_POEMS.find((poem) => poem.slug === 'jing-ye-si')?.learningGuide.glossary.map((item) => item.term)).toContain('疑');
     expect(PRIMARY_POEMS.find((poem) => poem.slug === 'jiu-yue-jiu-ri-yi-shan-dong-xiong-di')?.learningGuide.context).toContain('不是今天的山东省');
+  });
+
+  it('covers common Chinese primary-school exam prompts without claiming a national ranking', () => {
+    expect(new Set(PRIMARY_POEMS.map((poem) => poem.examPoint)).size).toBe(75);
+    expect(PRIMARY_POEMS.find((poem) => poem.slug === 'lu-zhai')?.examPoint.pitfall).toContain('zhài');
+    expect(PRIMARY_POEMS.find((poem) => poem.slug === 'bo-chuan-gua-zhou')?.examPoint.focus).toContain('“绿”作动词');
+    expect(PRIMARY_POEMS.find((poem) => poem.slug === 'ti-lin-an-di')?.examPoint.pitfall).toContain('南宋都城');
   });
 
   it('reuses the reviewed first batch and assigns new assets to the poetry gallery', () => {

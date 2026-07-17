@@ -1,4 +1,5 @@
 import { POEM_AUTHOR_PROFILES, type PoemAuthorProfile } from './poem-authors';
+import { POEM_EXAM_POINTS, type PoemExamPoint } from './poem-exam-points';
 import { POEM_LEARNING_GUIDES, type PoemLearningGuide } from './poem-learning-guides';
 
 export type PoemEvidence = '史实较明确' | '部分可考' | '情境复原';
@@ -19,10 +20,11 @@ export type PrimaryPoem = {
   imageAlt: string;
   authorProfile: PoemAuthorProfile;
   learningGuide: PoemLearningGuide;
+  examPoint: PoemExamPoint;
   narrationAudio?: string;
 };
 
-type PoemSeed = Omit<PrimaryPoem, 'image' | 'imageAlt' | 'authorProfile' | 'learningGuide'> & { existingImage?: string };
+type PoemSeed = Omit<PrimaryPoem, 'image' | 'imageAlt' | 'authorProfile' | 'learningGuide' | 'examPoint'> & { existingImage?: string };
 
 const p = (
   id: number,
@@ -122,7 +124,8 @@ export const PRIMARY_POEMS: PrimaryPoem[] = seeds.map(({ existingImage, ...poem 
   image: existingImage ?? `/images/poems/${poem.slug}.jpg`,
   imageAlt: `${poem.dynasty}代氛围下《${poem.title}》${poem.interpretation}`,
   authorProfile: POEM_AUTHOR_PROFILES[poem.author],
-  learningGuide: POEM_LEARNING_GUIDES[poem.slug]
+  learningGuide: POEM_LEARNING_GUIDES[poem.slug],
+  examPoint: POEM_EXAM_POINTS[poem.slug]
 }));
 
 export const PRIMARY_POEM_BY_SLUG = new Map(PRIMARY_POEMS.map((poem) => [poem.slug, poem]));

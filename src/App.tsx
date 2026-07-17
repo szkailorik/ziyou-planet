@@ -635,7 +635,7 @@ function PoetryLibrary() {
     const normalized = query.trim().toLowerCase();
     const selectedEra = POETRY_ERAS.find((item) => item.value === era)!;
     return PRIMARY_POEMS.filter((poem) => {
-      const haystack = [poem.title, poem.author, poem.dynasty, ...poem.lines, poem.interpretation, poem.mood, poem.learningGuide.context, poem.learningGuide.readingHint, ...poem.learningGuide.glossary.flatMap((item) => [item.term, item.meaning])].join(' ').toLowerCase();
+      const haystack = [poem.title, poem.author, poem.dynasty, ...poem.lines, poem.interpretation, poem.mood, poem.learningGuide.context, poem.learningGuide.readingHint, poem.examPoint.focus, poem.examPoint.pitfall, ...poem.learningGuide.glossary.flatMap((item) => [item.term, item.meaning])].join(' ').toLowerCase();
       return selectedEra.match(poem) && (!normalized || haystack.includes(normalized));
     });
   }, [era, query]);
@@ -671,6 +671,10 @@ function PoetryLibrary() {
         </div>
       </section>
       <div className="poem-dialog-details">
+        <section className="poem-exam-card" aria-label={`${selected.title}常见考点`}>
+          <header><span aria-hidden="true">考</span><div><strong>中国小学常见考点</strong><small>按背诵默写、字词、文学常识和诗意理解整理；不同地区题型会有差异，不作押题。</small></div></header>
+          <div><p><b>常见问法</b>{selected.examPoint.focus}</p><p><b>易错提醒</b>{selected.examPoint.pitfall}</p></div>
+        </section>
         <section className="poem-learning-card" aria-label={`${selected.title}儿童理解卡`}>
           <header><span aria-hidden="true">懂</span><div><strong>三步读懂这首诗</strong><small>先扫清古词，再认识人物地点，最后抓住诗里的关键变化。</small></div></header>
           <div className="poem-learning-grid">
