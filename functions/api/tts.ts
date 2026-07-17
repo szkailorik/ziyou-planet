@@ -1,5 +1,5 @@
 import { CURRICULUM_CHARACTERS } from '../../src/data/curriculum-characters';
-import { PRIMARY_POEMS } from '../../src/data/primary-poems';
+import { PRIMARY_POEM_SPEECH } from '../../src/data/primary-poem-speech';
 
 type Env = {
   DASHSCOPE_API_KEY?: string;
@@ -25,11 +25,12 @@ export function resolveSpeechInput(input: unknown) {
     return { kind: 'character' as const, id: character, text: character, instructions: CHARACTER_INSTRUCTIONS };
   }
   if (value.kind === 'poem') {
-    const poem = PRIMARY_POEMS.find((item) => item.slug === value.slug);
+    const slug = String(value.slug ?? '').trim();
+    const poem = PRIMARY_POEM_SPEECH[slug];
     if (!poem) throw new Error('没有找到这首诗');
     return {
       kind: 'poem' as const,
-      id: poem.slug,
+      id: slug,
       text: [`《${poem.title}》`, `${poem.dynasty}，${poem.author}`, ...poem.lines].join('。\n'),
       instructions: POEM_INSTRUCTIONS
     };

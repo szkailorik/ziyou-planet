@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PRIMARY_POEM_SPEECH } from './primary-poem-speech';
 import { PRIMARY_POEMS } from './primary-poems';
 
 describe('primary school poetry library', () => {
@@ -28,5 +29,12 @@ describe('primary school poetry library', () => {
   it('reuses the reviewed first batch and assigns new assets to the poetry gallery', () => {
     expect(PRIMARY_POEMS.filter((poem) => poem.image.startsWith('/images/classics/'))).toHaveLength(8);
     expect(PRIMARY_POEMS.filter((poem) => poem.image.startsWith('/images/poems/'))).toHaveLength(67);
+  });
+
+  it('keeps the lightweight TTS manifest synchronized with the reviewed poem text', () => {
+    expect(Object.keys(PRIMARY_POEM_SPEECH)).toHaveLength(PRIMARY_POEMS.length);
+    for (const { slug, title, author, dynasty, lines } of PRIMARY_POEMS) {
+      expect(PRIMARY_POEM_SPEECH[slug]).toEqual({ title, author, dynasty, lines });
+    }
   });
 });
