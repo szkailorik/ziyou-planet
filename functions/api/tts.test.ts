@@ -30,5 +30,8 @@ describe('Qwen3-TTS proxy input', () => {
     const cacheKey = buildAudioCacheKey('https://shizi.kailorik.com/api/tts?ignored=1', speech);
     expect(cacheKey.method).toBe('GET');
     expect(cacheKey.url).toBe('https://shizi.kailorik.com/api/tts-cache/v1/poem/jing-ye-si.wav');
+    const retry = resolveSpeechInput({ kind: 'character', character: '场', variant: 2 });
+    expect(buildAudioCacheKey('https://shizi.kailorik.com/api/tts', retry).url).toContain('/character/191-retry2.wav');
+    expect(() => resolveSpeechInput({ kind: 'character', character: '场', variant: 4 })).toThrow('语音变体不正确');
   });
 });

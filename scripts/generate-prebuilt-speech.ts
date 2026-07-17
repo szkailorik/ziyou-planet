@@ -24,9 +24,13 @@ const limitValue = option('--limit', '');
 const limit = limitValue ? positiveNumber(limitValue, '--limit') : Number.POSITIVE_INFINITY;
 const credentialsCsv = option('--credentials-csv', '');
 const proxyUrl = option('--proxy-url', '');
+const variant = positiveNumber(option('--variant', '1'), '--variant');
+const repairOverBytesValue = option('--repair-over-bytes', '');
+const repairOverBytes = repairOverBytesValue ? positiveNumber(repairOverBytesValue, '--repair-over-bytes') : Number.POSITIVE_INFINITY;
 const ffmpeg = process.env.FFMPEG_PATH || '/opt/homebrew/bin/ffmpeg';
 
 if (!['characters', 'poems', 'all'].includes(kind)) throw new Error('--kind 必须是 characters、poems 或 all');
+if (variant > 3) throw new Error('--variant 只能是 1、2 或 3');
 
 const credentials = credentialsCsv ? await readCredentials(credentialsCsv) : {};
 const apiKey = process.env.DASHSCOPE_API_KEY || credentials.apiKey;
@@ -41,7 +45,8 @@ await mkdir(outputRoot, { recursive: true });
 const pending: SpeechTask[] = [];
 let skipped = 0;
 for (const task of allTasks) {
-  if (await isValidAudio(task.output)) skipped += 1;
+  const size = await audioSize(task.output);
+  if (size >= 1_000 && (task.request.kind !== 'character' || size <= repairOverBytes)) skipped += 1;
   else pending.push(task);
 }
 
@@ -115,7 +120,7 @@ async function fetchFromProxy(request: SpeechTask['request']) {
   const response = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
+    body: JSON.stringify({ ...request, variant })
   }, 120_000);
   if (!response.ok) {
     const detail = await response.text();
@@ -178,11 +183,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeout: number)
 }
 
 async function isValidAudio(path: string) {
-  try {
-    return (await stat(path)).size >= 1_000;
-  } catch {
-    return false;
-  }
+  return await audioSize(path) >= 1_000;
+}
+
+async function audioSize(path: string) {
+  try { return (await stat(path)).size; } catch { return 0; }
 }
 
 async function readCredentials(path: string) {

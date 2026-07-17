@@ -50,6 +50,12 @@ npm run generate:speech -- --proxy-url https://shizi.kailorik.com/api/tts --kind
 
 生成结果位于 `public/audio/tts/v1/`：3500 个单字以课程字表序号命名，75 首诗词以稳定 slug 命名。音频为 48 kbps、24 kHz、单声道 MP3；密钥只存在 Cloudflare Secret，批处理不把密钥写进文件或浏览器。
 
+单字完成后按文件时长对应的体积做异常筛查；例如重新生成大于 12 KB 的异常单字，并使用独立缓存变体避免重复取回同一份模型输出：
+
+```bash
+npm run generate:speech -- --proxy-url https://shizi.kailorik.com/api/tts --kind characters --repair-over-bytes 12000 --variant 2 --concurrency 6
+```
+
 构建产物位于 `dist/`。首次在线加载生产构建后，Service Worker 会缓存应用壳与完整字库；Mac 的 Safari 可使用“添加到 Dock”安装为独立 Web App。
 
 部署到 Cloudflare Pages：

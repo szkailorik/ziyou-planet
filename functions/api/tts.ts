@@ -7,7 +7,7 @@ type Env = {
 };
 
 type Context = { request: Request; env: Env; waitUntil?: (promise: Promise<unknown>) => void };
-type SpeechInput = { kind: 'character'; character: string } | { kind: 'poem'; slug: string };
+type SpeechInput = ({ kind: 'character'; character: string } | { kind: 'poem'; slug: string }) & { variant?: number };
 
 const MODEL = 'qwen3-tts-instruct-flash';
 const VOICE = 'Cherry';
@@ -22,12 +22,14 @@ export function characterInstructions(character: string, pinyin: string) {
 export function resolveSpeechInput(input: unknown) {
   if (!input || typeof input !== 'object') throw new Error('请求格式不正确');
   const value = input as Partial<SpeechInput>;
+  const variant = value.variant === undefined ? 1 : Number(value.variant);
+  if (!Number.isInteger(variant) || variant < 1 || variant > 3) throw new Error('语音变体不正确');
   if (value.kind === 'character') {
     const character = String(value.character ?? '').trim();
     const index = CURRICULUM_CHARACTERS.indexOf(character);
     if ([...character].length !== 1 || index < 0) throw new Error('汉字不在课程字库中');
     const pinyin = CURRICULUM_PINYIN[index];
-    return { kind: 'character' as const, id: `${index + 1}`, text: character, instructions: characterInstructions(character, pinyin) };
+    return { kind: 'character' as const, id: `${index + 1}`, variant, text: character, instructions: characterInstructions(character, pinyin) };
   }
   if (value.kind === 'poem') {
     const slug = String(value.slug ?? '').trim();
@@ -36,6 +38,7 @@ export function resolveSpeechInput(input: unknown) {
     return {
       kind: 'poem' as const,
       id: slug,
+      variant,
       text: [`《${poem.title}》`, `${poem.dynasty}，${poem.author}`, ...poem.lines].join('。\n'),
       instructions: POEM_INSTRUCTIONS
     };
@@ -45,7 +48,8 @@ export function resolveSpeechInput(input: unknown) {
 
 export function buildAudioCacheKey(requestUrl: string, input: ReturnType<typeof resolveSpeechInput>) {
   const url = new URL(requestUrl);
-  url.pathname = `/api/tts-cache/${CACHE_VERSION}/${input.kind}/${encodeURIComponent(input.id)}.wav`;
+  const variantSuffix = input.variant > 1 ? `-retry${input.variant}` : '';
+  url.pathname = `/api/tts-cache/${CACHE_VERSION}/${input.kind}/${encodeURIComponent(input.id)}${variantSuffix}.wav`;
   url.search = '';
   return new Request(url.toString(), { method: 'GET' });
 }
