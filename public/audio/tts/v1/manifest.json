@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "engine": "qwen3-tts-instruct-flash",
+  "voice": "Cherry",
+  "format": {
+    "codec": "mp3",
+    "bitrateKbps": 48,
+    "sampleRateHz": 24000,
+    "channels": 1
+  },
+  "characters": 3500,
+  "poems": 75
+}

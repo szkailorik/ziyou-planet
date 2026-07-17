@@ -53,7 +53,7 @@ npm run generate:speech -- --proxy-url https://shizi.kailorik.com/api/tts --kind
 单字完成后按文件时长对应的体积做异常筛查；例如重新生成大于 12 KB 的异常单字，并使用独立缓存变体避免重复取回同一份模型输出：
 
 ```bash
-npm run generate:speech -- --proxy-url https://shizi.kailorik.com/api/tts --kind characters --repair-over-bytes 12000 --variant 2 --concurrency 6
+npm run generate:speech -- --proxy-url https://shizi.kailorik.com/api/tts --kind characters --repair-under-bytes 2500 --repair-over-bytes 12000 --variant 2 --concurrency 6
 ```
 
 构建产物位于 `dist/`。首次在线加载生产构建后，Service Worker 会缓存应用壳与完整字库；Mac 的 Safari 可使用“添加到 Dock”安装为独立 Web App。

@@ -27,6 +27,8 @@ const proxyUrl = option('--proxy-url', '');
 const variant = positiveNumber(option('--variant', '1'), '--variant');
 const repairOverBytesValue = option('--repair-over-bytes', '');
 const repairOverBytes = repairOverBytesValue ? positiveNumber(repairOverBytesValue, '--repair-over-bytes') : Number.POSITIVE_INFINITY;
+const repairUnderBytesValue = option('--repair-under-bytes', '');
+const repairUnderBytes = repairUnderBytesValue ? positiveNumber(repairUnderBytesValue, '--repair-under-bytes') : 1_000;
 const ffmpeg = process.env.FFMPEG_PATH || '/opt/homebrew/bin/ffmpeg';
 
 if (!['characters', 'poems', 'all'].includes(kind)) throw new Error('--kind 必须是 characters、poems 或 all');
@@ -46,7 +48,7 @@ const pending: SpeechTask[] = [];
 let skipped = 0;
 for (const task of allTasks) {
   const size = await audioSize(task.output);
-  if (size >= 1_000 && (task.request.kind !== 'character' || size <= repairOverBytes)) skipped += 1;
+  if (size >= 1_000 && (task.request.kind !== 'character' || (size >= repairUnderBytes && size <= repairOverBytes))) skipped += 1;
   else pending.push(task);
 }
 
