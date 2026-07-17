@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildQwenPayload, resolveSpeechInput } from './tts';
+import { buildAudioCacheKey, buildQwenPayload, resolveSpeechInput } from './tts';
 
 describe('Qwen3-TTS proxy input', () => {
   it('only accepts a single character from the curriculum catalog', () => {
@@ -21,5 +21,12 @@ describe('Qwen3-TTS proxy input', () => {
     expect(payload.input.voice).toBe('Cherry');
     expect(payload.input.language_type).toBe('Chinese');
     expect(payload.input.instructions).toContain('标准的普通话');
+  });
+
+  it('builds a stable same-origin GET key for edge audio reuse', () => {
+    const speech = resolveSpeechInput({ kind: 'poem', slug: 'jing-ye-si' });
+    const cacheKey = buildAudioCacheKey('https://shizi.kailorik.com/api/tts?ignored=1', speech);
+    expect(cacheKey.method).toBe('GET');
+    expect(cacheKey.url).toBe('https://shizi.kailorik.com/api/tts-cache/v1/poem/jing-ye-si.wav');
   });
 });

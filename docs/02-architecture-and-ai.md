@@ -107,6 +107,7 @@ IndexedDB 本地存储
 - 浏览器只调用同域 `/api/tts`；服务端仅接受课标 3500 字中的一个汉字，或 75 首已收录诗词的 `slug`，诗文由服务端字库解析，拒绝任意文本生成。
 - Cloudflare Function 调用 DashScope 后再代理音频文件，浏览器不会看到 API Key 或阿里云签名下载地址。
 - 前端提前准备音频，确保 iPad 点击后可直接播放；阿里服务失败或离线时，才降级到设备内置普通话，不影响识字主流程。
+- 已生成的 WAV 会按“缓存版本 + 内容”写入 Cloudflare Cache API，同一数据中心的后续设备可避免重复合成。Cloudflare 的 Cache API 内容不会在数据中心之间自动复制，因此新区域第一次播放仍可能需要等待。[Cloudflare Cache API](https://developers.cloudflare.com/workers/runtime-apis/cache/)
 - 不上传儿童姓名、学习记录、录音或任何个人数据；合成输入只有公开汉字与公版诗词文本。
 
 ## AI 输出门禁
