@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { CHARACTERS } from './enrichment';
+import { CHARACTERS, SEED_ORDER } from './enrichment';
+import { ENGLISH_BRIDGES } from './english-bridges';
+import { teachingMeaning } from './teaching-bridges';
+import { placementSampleIds } from '../domain/placement';
 
 describe('character catalog', () => {
   it('keeps 3500 unique curriculum characters', () => {
@@ -30,6 +33,27 @@ describe('character catalog', () => {
     const reviewed = CHARACTERS.filter((entry) => entry.contentStatus === 'reviewed');
     expect(reviewed.length).toBeGreaterThan(40);
     expect(reviewed.every((entry) => entry.example.includes(entry.char))).toBe(true);
+  });
+
+  it('gives every high-frequency seed character an immediate meaning and English bridge', () => {
+    const byChar = new Map(CHARACTERS.map((entry) => [entry.char, entry]));
+    for (const char of SEED_ORDER) {
+      const entry = byChar.get(char)!;
+      expect(teachingMeaning(entry).length).toBeGreaterThanOrEqual(4);
+      expect(ENGLISH_BRIDGES[char]?.length, `${char} needs an English bridge`).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps the first two placement rounds free of empty teaching cards', () => {
+    const byId = new Map(CHARACTERS.map((entry) => [entry.id, entry]));
+    const diagnosticEntries = placementSampleIds(CHARACTERS, [], 60).map((id) => byId.get(id)!);
+    expect(diagnosticEntries).toHaveLength(60);
+    for (const entry of diagnosticEntries) {
+      expect(teachingMeaning(entry).length, `${entry.char} needs a meaning`).toBeGreaterThan(5);
+      expect(entry.words.length, `${entry.char} needs words`).toBeGreaterThanOrEqual(2);
+      expect(entry.example.includes(entry.char), `${entry.char} needs a sentence`).toBe(true);
+      expect(entry.englishBridges.length, `${entry.char} needs English`).toBeGreaterThan(0);
+    }
   });
 
   it('keeps research boundaries on every classic and publishes only the reviewed image batch', () => {

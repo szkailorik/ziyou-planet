@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
 import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
+import { teachingMeaning } from './data/teaching-bridges';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
 import { confidenceToResult, progressFromAttempts } from './domain/mastery';
 import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSampleIds } from './domain/placement';
@@ -352,7 +353,7 @@ function RouteStop({ current, done, number, title, detail }: { current: boolean;
 function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChange }: { settings: ChildSession; attempts: AttemptEvent[]; progress: ReturnType<typeof progressFromAttempts>; addAttempt: (event: AttemptEvent) => Promise<void>; onFinish: () => void; onFocusChange: (active: boolean) => void }) {
   const [session, setSession] = useState<ScanSession | null>(null);
   const [answer, setAnswer] = useState<Confidence | null>(null);
-  const [sessionCounts, setSessionCounts] = useState({ sure: 0, unsure: 0, teach: 0 });
+  const [sessionCounts, setSessionCounts] = useState({ sure: 0, teach: 0 });
   const startTime = useRef(Date.now());
   const answerLock = useRef(false);
 
@@ -364,7 +365,7 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
   function start(ids: number[], kind: ScanKind) {
     if (!ids.length) return;
     setSession({ ids, index: 0, size: ids.length, kind, startedAt: new Date().toISOString() });
-    setSessionCounts({ sure: 0, unsure: 0, teach: 0 });
+    setSessionCounts({ sure: 0, teach: 0 });
     setAnswer(null);
     answerLock.current = false;
     onFocusChange(true);
@@ -382,8 +383,7 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
         return;
       }
       if (event.key === '1') void respond('sure');
-      if (event.key === '2') void respond('unsure');
-      if (event.key === '3') void respond('teach-me');
+      if (event.key === '2') void respond('teach-me');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -394,17 +394,17 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
       {estimate.sampleSize >= 24 && <section className="placement-summary"><div><span>当前熟悉度范围</span><strong>{estimate.lower}—{estimate.upper}<small> 字</small></strong><p>中心估计约 {estimate.estimate} 字 · {estimate.reliability}</p></div><div><span>定位样本</span><strong>{estimate.sampleSize}<small> 字</small></strong><p>再测不同位置的字，范围会继续收窄</p></div></section>}
       <div className="scan-options">
         <ScanOption size={placementIds.length} title={estimate.sampleSize < 24 ? '快速定位' : '缩小范围'} text={estimate.sampleSize < 24 ? '跨难度抽样，约 4-5 分钟' : '在不同层级追加样本，约 3 分钟'} recommended onClick={() => start(placementIds, 'placement')} />
-        <ScanOption size={weaknessIds.length || 20} title="薄弱字雷达" text={weaknessIds.length ? `优先重看 ${weaknessIds.length} 个不确定、错误或到期字` : '完成定位后，这里会自动聚集真正薄弱的字'} disabled={!weaknessIds.length} onClick={() => start(weaknessIds, 'weakness')} />
+        <ScanOption size={weaknessIds.length || 20} title="薄弱字雷达" text={weaknessIds.length ? `优先重看 ${weaknessIds.length} 个需要帮助、错误或到期字` : '完成定位后，这里会自动聚集真正薄弱的字'} disabled={!weaknessIds.length} onClick={() => start(weaknessIds, 'weakness')} />
         <ScanOption size={coverageIds.length} title="扩大覆盖" text="分层抽取 60 个尚未测过的字，适合识字基础较好的孩子" onClick={() => start(coverageIds, 'coverage')} />
       </div>
-      <div className="explain-card"><span>什么时候需要把 3500 个字全部扫完？</span><p>一般不需要一次逐字测完。先用分层样本得到范围，再追加边界样本；训练只集中在“不确定、答错、到期”的字。只有家长需要逐字盘点时，才用“扩大覆盖”分多天完成全库。</p></div>
+      <div className="explain-card"><span>什么时候需要把 3500 个字全部扫完？</span><p>一般不需要一次逐字测完。先用分层样本得到范围，再追加边界样本；训练只集中在“需要帮助、答错、到期”的字。只有家长需要逐字盘点时，才用“扩大覆盖”分多天完成全库。</p></div>
     </div>;
   }
 
   if (session.index >= session.ids.length) {
     const updatedEstimate = estimateLiteracy(CHARACTERS, attempts);
-    const needsPractice = sessionCounts.unsure + sessionCounts.teach;
-    return <div className="page narrow-page"><div className="completion-card"><div className="completion-orbit">✦</div><span className="eyebrow">{session.kind === 'weakness' ? '薄弱字检查完成' : '定位完成'}</span><h1>找到 {needsPractice} 个值得练的字</h1><p>{sessionCounts.sure ? `已经会读的 ${sessionCounts.sure} 个字直接跳过，不浪费练习时间。` : ''}{session.kind === 'weakness' ? '真正薄弱的字会更早进入复习。' : updatedEstimate.sampleSize >= 24 ? `当前熟悉度大约落在 ${updatedEstimate.lower}—${updatedEstimate.upper} 字；继续分层抽样会让范围更可靠。` : '再完成一轮快速定位，就能看到更可靠的识字范围。'}</p><div className="completion-stats"><div><strong>{sessionCounts.sure}</strong><small>已会 · 跳过</small></div><div><strong>{sessionCounts.unsure}</strong><small>还需确认</small></div><div><strong>{sessionCounts.teach}</strong><small>优先学习</small></div></div><button className="primary-button" onClick={() => { onFocusChange(false); setSession(null); }}>{session.kind === 'weakness' ? '查看新的薄弱队列' : '继续缩小范围'} →</button><button className="text-button" onClick={onFinish}>先回到今天</button></div></div>;
+    const needsPractice = sessionCounts.teach;
+    return <div className="page narrow-page"><div className="completion-card"><div className="completion-orbit">✦</div><span className="eyebrow">{session.kind === 'weakness' ? '薄弱字检查完成' : '定位完成'}</span><h1>找到 {needsPractice} 个值得练的字</h1><p>{sessionCounts.sure ? `已经会读的 ${sessionCounts.sure} 个字直接跳过，不浪费练习时间。` : ''}{session.kind === 'weakness' ? '需要帮助的字会更早进入复习。' : updatedEstimate.sampleSize >= 24 ? `当前熟悉度大约落在 ${updatedEstimate.lower}—${updatedEstimate.upper} 字；继续分层抽样会让范围更可靠。` : '再完成一轮快速定位，就能看到更可靠的识字范围。'}</p><div className="completion-stats completion-stats--binary"><div><strong>{sessionCounts.sure}</strong><small>我会读 · 跳过</small></div><div><strong>{sessionCounts.teach}</strong><small>教教我 · 优先学</small></div></div><button className="primary-button" onClick={() => { onFocusChange(false); setSession(null); }}>{session.kind === 'weakness' ? '查看新的薄弱队列' : '继续缩小范围'} →</button><button className="text-button" onClick={onFinish}>先回到今天</button></div></div>;
   }
 
   const entry = CHARACTER_BY_ID.get(session.ids[session.index])!;
@@ -425,7 +425,6 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
     setSessionCounts((current) => ({
       ...current,
       sure: current.sure + (confidence === 'sure' ? 1 : 0),
-      unsure: current.unsure + (confidence === 'unsure' ? 1 : 0),
       teach: current.teach + (confidence === 'teach-me' ? 1 : 0)
     }));
     if (confidence === 'sure') next();
@@ -449,10 +448,10 @@ function Scan({ settings, attempts, progress, addAttempt, onFinish, onFocusChang
       <section className="character-stage">
         <div className="character-label"><span>{session.kind === 'weakness' ? '薄弱字复查' : entry.theme}</span><small>课标字表{entry.curriculumList === 1 ? '一' : '二'} · 分层定位样本</small></div>
         <CharacterGlyph entry={entry} />
-        <p className="prompt-line">{answer ? `记住“${entry.char}”的样子，再看看右边的线索。` : '你会读这个字吗？'}</p>
+        <p className="prompt-line">{answer ? `先听读音，再把“${entry.char}”和词、句、英文连起来。` : '你会读这个字吗？'}</p>
       </section>
       <aside className="focus-side">
-        {!answer ? <><div className="coach-card"><span className="coach-face">◉</span><div><strong>先自己回想</strong><p>选“我会读”会立即进入下一字；不确定时会先显示学习线索。</p></div></div><div className="confidence-buttons"><button className="confidence sure" aria-keyshortcuts="1" onClick={() => void respond('sure')}><span>✓</span><div><strong>我会读</strong><small>自动下一字 · 键盘 1</small></div></button><button className="confidence unsure" aria-keyshortcuts="2" onClick={() => void respond('unsure')}><span>~</span><div><strong>我不确定</strong><small>键盘 2</small></div></button><button className="confidence teach" aria-keyshortcuts="3" onClick={() => void respond('teach-me')}><span>✦</span><div><strong>请教教我</strong><small>键盘 3</small></div></button></div></> : <><div className="next-card next-card--scan"><div><span>线索已经收好</span><p>这个字会优先复习。</p></div><button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>{session.index + 1 === session.size ? '完成扫描' : '下一个字'}（Enter）→</button></div><Feedback entry={entry} confidence={answer} settings={settings} /></>}
+        {!answer ? <><div className="coach-card"><span className="coach-face">◉</span><div><strong>先自己回想</strong><p>会就快速跳过；不会或拿不准，都点“教教我”。</p></div></div><div className="confidence-buttons confidence-buttons--binary"><button className="confidence sure" aria-keyshortcuts="1" onClick={() => void respond('sure')}><span>✓</span><div><strong>我会读</strong><small>自动下一字 · 键盘 1</small></div></button><button className="confidence teach" aria-keyshortcuts="2" onClick={() => void respond('teach-me')}><span>✦</span><div><strong>教教我</strong><small>马上看字义、词句和英文 · 键盘 2</small></div></button></div></> : <><div className="next-card next-card--scan"><div><span>已经学过这个字</span><p>它会优先进入复习。</p></div><button className="primary-button" aria-keyshortcuts="Enter" onClick={next}>{session.index + 1 === session.size ? '完成扫描' : '下一个字'}（Enter）→</button></div><Feedback entry={entry} confidence={answer} settings={settings} /></>}
       </aside>
     </div>
   </div>;
@@ -462,11 +461,11 @@ function ScanOption({ size, title, text, recommended, disabled = false, onClick 
   return <button className="scan-option" disabled={disabled} onClick={onClick}>{recommended && <b>推荐</b>}<strong>{size}<small>字</small></strong><span>{title}</span><p>{text}</p><i>{disabled ? '等待定位结果' : '开始 →'}</i></button>;
 }
 
-function ContextBridge({ entry, compact = false, showEnglish = false }: { entry: CharacterEntry; compact?: boolean; showEnglish?: boolean }) {
+function ContextBridge({ entry, compact = false, showEnglish = false, essentialsOnly = false }: { entry: CharacterEntry; compact?: boolean; showEnglish?: boolean; essentialsOnly?: boolean }) {
   return <><div className={compact ? 'context-bridge context-bridge--compact' : 'context-bridge'} aria-label="从字到词再到生活句"><div className="context-step"><small>字</small><strong>{entry.char}</strong></div><span aria-hidden="true">→</span><div className="context-step context-step--words"><small>词</small><p>{entry.words.length ? entry.words.map((word) => <b key={word}>{word}</b>) : <em>词语审核中</em>}</p></div><span aria-hidden="true">→</span><div className="context-step context-step--line"><small>生活句</small><p>{entry.example}</p></div></div>
-    {showEnglish && entry.englishBridges.length > 0 && <div className="english-bridge"><span>EN</span><div><small>答后语义桥 · 不参与中文评分</small><p>{entry.englishBridges.map((bridge) => <b key={`${bridge.zh}-${bridge.en}`}>{bridge.zh} <i>→</i> {bridge.en}</b>)}</p></div></div>}
-    {entry.characterFamily && <div className="family-bridge"><span>字族</span><div><small>结构迁移 · 不是读音答案</small><p>{entry.characterFamily.members.map((char) => <b className={char === entry.char ? 'current' : ''} key={char}>{char}</b>)}</p><em>{entry.characterFamily.note}</em></div></div>}
-    <CulturalBridge entry={entry} />
+    {showEnglish && <div className="english-bridge"><span>EN</span><div><small>英文词义桥 · 帮助双语理解</small>{entry.englishBridges.length > 0 ? <p>{entry.englishBridges.map((bridge) => <b key={`${bridge.zh}-${bridge.en}`}>{bridge.zh} <i>→</i> {bridge.en}</b>)}</p> : <p className="english-pending">这个字需要放进具体词语才能准确翻译，先看中文词句。</p>}</div></div>}
+    {!essentialsOnly && entry.characterFamily && <div className="family-bridge"><span>字族</span><div><small>结构迁移 · 不是读音答案</small><p>{entry.characterFamily.members.map((char) => <b className={char === entry.char ? 'current' : ''} key={char}>{char}</b>)}</p><em>{entry.characterFamily.note}</em></div></div>}
+    {!essentialsOnly && <CulturalBridge entry={entry} />}
   </>;
 }
 
@@ -480,7 +479,7 @@ function CulturalBridge({ entry }: { entry: CharacterEntry }) {
 }
 
 function Feedback({ entry, confidence, settings }: { entry: CharacterEntry; confidence: Confidence; settings: ChildSession }) {
-  return <div className="feedback-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : confidence === 'unsure' ? '认真地说“不确定”也很棒' : '现在一起认识它'}</span><h2>{entry.pinyin}</h2></div><QwenSpeechButton request={{ kind: 'character', character: entry.char }} enabled={settings.sound} className="sound-button" readyLabel="点读" playingLabel="停止" preparingLabel="准备中…" ariaLabel={`用阿里云 Qwen3-TTS 播放${entry.char}`} fallbackText={entry.char} fallbackRate={0.78} /></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} /><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div><p className="evidence-note">先单字回想，答后连接词和句；换题型、换语境、隔天还能认出，才会成为“稳定掌握”。</p></div>;
+  return <div className="feedback-panel teaching-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : '现在就教你'}</span><h2><b>{entry.char}</b> {entry.pinyin}</h2></div><QwenSpeechButton request={{ kind: 'character', character: entry.char }} enabled={settings.sound} className="sound-button" readyLabel="听读音" playingLabel="停止" preparingLabel="准备中…" ariaLabel={`用阿里云 Qwen3-TTS 播放${entry.char}`} fallbackText={entry.char} fallbackRate={0.78} /></div><div className="meaning-bridge"><span>字义</span><p>{teachingMeaning(entry)}</p></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} essentialsOnly /><details className="teaching-more"><summary>再看一个小提示</summary><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div></details><p className="evidence-note">先记住读音和一个词；稍后换个句子再认一次，才会真正变熟。</p></div>;
 }
 
 function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { settings: ChildSession; attempts: AttemptEvent[]; progress: ReturnType<typeof progressFromAttempts>; addAttempt: (event: AttemptEvent) => Promise<void>; onFocusChange: (active: boolean) => void }) {
@@ -810,10 +809,10 @@ function Report({ settings, activeChild, setSettings, attempts, setAttempts, pro
   return <div className="page report-page"><div className="report-title"><div><span className="eyebrow">家长中心 · 当前档案</span><h1>{activeChild.nickname} 的学习报告</h1><p>每个孩子的扫描、复习队列和掌握证据完全分开。</p></div><button className="quiet-button" onClick={lock}>锁定家长中心</button></div>
     <section className="report-hero"><div><span className="report-label">当前可确认的稳定掌握</span><strong>{stats.stable}<small> 字</small></strong><p>已扫描 {stats.scanned} 字 · 基本掌握 {stats.basic} 字</p></div><div className="reliability"><span>结论可靠度</span><strong>{reliability}</strong><p>{objective.length ? `已有 ${objective.length} 次客观复核，正确 ${objectiveCorrect} 次。` : '目前只有主观熟悉度记录，不能据此给出精确识字量。'}</p></div></section>
     {literacyEstimate.sampleSize >= 24 && <section className="placement-report"><div><span className="eyebrow">分层定位结果</span><h2>{literacyEstimate.lower}—{literacyEstimate.upper}<small> 字</small></h2><p>中心估计约 {literacyEstimate.estimate} 字；来自课标字表一、二的 {literacyEstimate.sampleSize} 个代表样本。</p></div><div><strong>{literacyEstimate.reliability}</strong><p>这是“会读”的熟悉度范围，不等于稳定掌握；已审核题库中的自报会读字还会进入客观复核。</p></div></section>}
-    <section className="metric-grid"><Metric icon="✓" tone="green" label="我会读（自报）" value={stats.sure} note="等待客观复核" /><Metric icon="~" tone="yellow" label="我不确定" value={stats.unsure} note="优先短期复习" /><Metric icon="✦" tone="red" label="请教教我" value={stats.teach} note="进入学习队列" /><Metric icon="↻" tone="purple" label="现在到期" value={stats.due} note="建议今天再见面" /></section>
+    <section className="metric-grid metric-grid--three"><Metric icon="✓" tone="green" label="我会读（自报）" value={stats.sure} note="等待客观复核" /><Metric icon="✦" tone="red" label="需要帮助" value={stats.unsure + stats.teach} note="“教教我”队列" /><Metric icon="↻" tone="purple" label="现在到期" value={stats.due} note="建议今天再见面" /></section>
     <section className="efficiency-panel"><div><span className="eyebrow">识字自动化效率</span><h2>准确、稳定，再看速度</h2><p>系统静默记录作答时间，不显示倒计时、不做同龄排名；速度不能抵消错误。</p></div><div className="efficiency-metrics"><div><small>客观正确率</small><strong>{objective.length ? `${Math.round(objectiveCorrect / objective.length * 100)}%` : '—'}</strong><span>{objectiveCorrect} / {objective.length} 次</span></div><div><small>正确作答中位数</small><strong>{medianLatency === undefined ? '—' : medianLatency < 1000 ? '<1秒' : `${(medianLatency / 1000).toFixed(1)}秒`}</strong><span>最近 100 次无提示正确</span></div><div><small>自动化识字</small><strong>{automaticCount} 字</strong><span>另有 {developingCount} 字正在提速</span></div></div><p className="source-note">“自动化”需客观正确率 ≥80%、正确中位时间 ≤3 秒，并有跨日和词句语境证据；不同设备的毫秒值仅看个人趋势。</p></section>
     <div className="report-columns"><section className="panel"><div className="panel-title"><h2>课程层级覆盖</h2><span>不是同龄排名</span></div><Coverage label="课标字表一" detail={`${uniqueList1} / 2500 已有记录`} value={uniqueList1 / 2500} tone="purple" /><Coverage label="课标字表二" detail={`${stats.scanned - uniqueList1} / 1000 已有记录`} value={(stats.scanned - uniqueList1) / 1000} tone="orange" /><Coverage label="小学约 3000 字目标" detail={`${stats.stable} 字达到稳定证据`} value={stats.stable / 3000} tone="green" /><p className="source-note">“已有记录”不等于“已掌握”；稳定掌握需要客观题与跨日证据。</p></section>
-      <section className="panel"><div className="panel-title"><h2>下一步建议</h2><span>确定性规则生成</span></div><div className="advice-list"><div><span>01</span><p><strong>{stats.due ? `先复习 ${stats.due} 个到期字` : '完成第一轮客观复核'}</strong><small>每次 3-5 分钟，不用一次做完。</small></p></div><div><span>02</span><p><strong>优先处理“不确定”和“请教我”</strong><small>看读音、词语，再在另一题型中主动回忆。</small></p></div><div><span>03</span><p><strong>不要只追求扫描总量</strong><small>能在新词和隔天复测中认出，才是真正变稳。</small></p></div></div></section></div>
+      <section className="panel"><div className="panel-title"><h2>下一步建议</h2><span>确定性规则生成</span></div><div className="advice-list"><div><span>01</span><p><strong>{stats.due ? `先复习 ${stats.due} 个到期字` : '完成第一轮客观复核'}</strong><small>每次 3-5 分钟，不用一次做完。</small></p></div><div><span>02</span><p><strong>优先复习点过“教教我”的字</strong><small>看读音、字义和词句，再在另一题型中主动回忆。</small></p></div><div><span>03</span><p><strong>不要只追求扫描总量</strong><small>能在新词和隔天复测中认出，才是真正变稳。</small></p></div></div></section></div>
     <section className="profiles-panel"><div className="panel-title"><div><span className="eyebrow">家庭档案</span><h2>Kai、Lorik 和其他孩子</h2></div><button className="secondary-button" onClick={() => void addChild()}>＋ 添加档案</button></div><div className="profile-editor-grid">{settings.children.map((child) => <article className={child.id === settings.activeChildId ? 'profile-editor profile-editor--active' : 'profile-editor'} key={child.id}><button className="profile-select" onClick={() => void setSettings({ ...settings, activeChildId: child.id })} aria-pressed={child.id === settings.activeChildId}><span>{AVATAR_ICON[child.avatar]}</span><strong>{child.id === settings.activeChildId ? '当前学习' : '切换到此档案'}</strong></button><label>昵称<input value={child.nickname} onChange={(event) => void updateChild(child.id, { nickname: event.target.value.slice(0, 12) || '孩子' })} /></label><label>每日时长<select value={child.dailyMinutes} onChange={(event) => void updateChild(child.id, { dailyMinutes: Number(event.target.value) as 5 | 10 | 15 })}><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15">15 分钟</option></select></label><button className="profile-delete" disabled={settings.children.length <= 1} onClick={() => void removeChild(child.id)}>删除档案</button></article>)}</div></section>
     <CloudSyncPanel cloud={cloud} actions={cloudActions} />
     <section className="settings-panel"><div><h2>本机设置与数据</h2><p>本地始终保留可离线使用的数据；英文只在中文作答后显示，不进入中文掌握度。</p></div><div className="setting-switches"><label className="switch-label"><input type="checkbox" checked={settings.sound} onChange={(event) => void setSettings({ ...settings, sound: event.target.checked })} />启用设备点读声音</label><label className="switch-label"><input type="checkbox" checked={settings.englishBridge} onChange={(event) => void setSettings({ ...settings, englishBridge: event.target.checked })} />答后显示英文语义桥</label></div><div className="data-actions"><button onClick={() => void handleExport()}>导出全家备份</button><button onClick={() => inputRef.current?.click()}>恢复全家备份</button><button className="danger-button" onClick={() => void handleClear()}>删除本机数据</button><input ref={inputRef} hidden type="file" accept="application/json" onChange={(event) => void handleImport(event)} /></div></section>

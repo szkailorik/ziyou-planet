@@ -1,0 +1,930 @@
+{
+  "彩": {
+    "meaning": "颜色，花样，称赞时发出的声音或荣誉。",
+    "words": [
+      "彩色",
+      "喝彩"
+    ],
+    "example": "她用彩色笔画了一幅美丽的彩虹。",
+    "englishBridges": [
+      {
+        "zh": "彩色",
+        "en": "colorful"
+      }
+    ]
+  },
+  "册": {
+    "meaning": "书本的量词，或指装订好的本子、书集。",
+    "words": [
+      "画册",
+      "手册"
+    ],
+    "example": "这本画册里有很多美丽的风景照片。",
+    "englishBridges": [
+      {
+        "zh": "画册",
+        "en": "picture book/album"
+      }
+    ]
+  },
+  "昌": {
+    "meaning": "兴盛，繁荣；也用于地名或人名。",
+    "words": [
+      "昌盛",
+      "昌明"
+    ],
+    "example": "祝愿我们的祖国繁荣昌盛，越来越强大。",
+    "englishBridges": [
+      {
+        "zh": "昌盛",
+        "en": "prosperous"
+      }
+    ]
+  },
+  "搭": {
+    "meaning": "支起，架设；配合，配合在一起行动。",
+    "words": [
+      "搭配",
+      "搭建"
+    ],
+    "example": "这件上衣和那条裤子搭配起来很好看。",
+    "englishBridges": [
+      {
+        "zh": "搭配",
+        "en": "match/pair"
+      }
+    ]
+  },
+  "瘩": {
+    "meaning": "皮肤上突起的小硬块，常与“疙”连用。",
+    "words": [
+      "疙瘩",
+      "面疙瘩"
+    ],
+    "example": "我不小心磕了一下，腿上起了一个小疙瘩。",
+    "englishBridges": [
+      {
+        "zh": "疙瘩",
+        "en": "lump"
+      },
+      {
+        "zh": "面疙瘩",
+        "en": "dough drop"
+      }
+    ]
+  },
+  "掂": {
+    "meaning": "用手托着东西上下晃动，估量轻重。",
+    "words": [
+      "掂量",
+      "掂一掂"
+    ],
+    "example": "妈妈拿起苹果掂了掂，选了一个最重的。",
+    "englishBridges": [
+      {
+        "zh": "掂量",
+        "en": "weigh in hand"
+      }
+    ]
+  },
+  "刁": {
+    "meaning": "狡猾，奸诈，不好对付，爱挑刺。",
+    "words": [
+      "刁难",
+      "刁钻"
+    ],
+    "example": "他总是故意刁难别人，大家都不喜欢他。",
+    "englishBridges": [
+      {
+        "zh": "刁难",
+        "en": "make things difficult"
+      }
+    ]
+  },
+  "度": {
+    "meaning": "表示计量长短、大小的标准，或者指时间的经过。",
+    "words": [
+      "温度",
+      "角度"
+    ],
+    "example": "今天气温很高，室外温度达到了三十度。",
+    "englishBridges": [
+      {
+        "zh": "温度",
+        "en": "temperature"
+      },
+      {
+        "zh": "角度",
+        "en": "angle"
+      }
+    ]
+  },
+  "乏": {
+    "meaning": "缺少，疲倦，没有力气或精神。",
+    "words": [
+      "疲乏",
+      "缺乏"
+    ],
+    "example": "跑了长跑后，我感到有些疲乏。",
+    "englishBridges": [
+      {
+        "zh": "疲乏",
+        "en": "tired/weary"
+      }
+    ]
+  },
+  "返": {
+    "meaning": "回，回到原来的地方或状态。",
+    "words": [
+      "返回",
+      "往返"
+    ],
+    "example": "放学铃响了，同学们排队返回教室拿书包。",
+    "englishBridges": [
+      {
+        "zh": "返回",
+        "en": "return"
+      },
+      {
+        "zh": "往返",
+        "en": "round trip"
+      }
+    ]
+  },
+  "丰": {
+    "meaning": "多、盛大，常形容收成好、样子好看或内容多。",
+    "words": [
+      "丰收",
+      "丰满"
+    ],
+    "example": "秋天到了，农民伯伯迎来了大丰收。",
+    "englishBridges": [
+      {
+        "zh": "丰收",
+        "en": "bumper harvest"
+      }
+    ]
+  },
+  "福": {
+    "meaning": "幸福，好运，平安顺利的生活状态。",
+    "words": [
+      "幸福",
+      "福气"
+    ],
+    "example": "一家人团团圆圆就是最大的幸福。",
+    "englishBridges": [
+      {
+        "zh": "幸福",
+        "en": "happiness"
+      }
+    ]
+  },
+  "富": {
+    "meaning": "财产多，资源充足，也指内容丰富或想象力多。",
+    "words": [
+      "富有",
+      "丰富"
+    ],
+    "example": "我们的图书馆里有丰富的图书。",
+    "englishBridges": [
+      {
+        "zh": "丰富",
+        "en": "rich/abundant"
+      }
+    ]
+  },
+  "给": {
+    "meaning": "使对方得到某些东西或某种遭遇。",
+    "words": [
+      "送给",
+      "交给"
+    ],
+    "example": "我把画好的贺卡送给妈妈，祝她生日快乐。",
+    "englishBridges": [
+      {
+        "zh": "送给",
+        "en": "give to"
+      },
+      {
+        "zh": "交给",
+        "en": "hand over"
+      }
+    ]
+  },
+  "公": {
+    "meaning": "属于大家的，不是私人的；也指公平、公正。",
+    "words": [
+      "公共",
+      "公平"
+    ],
+    "example": "我们要爱护公共环境，不乱扔垃圾。",
+    "englishBridges": [
+      {
+        "zh": "公共",
+        "en": "public"
+      }
+    ]
+  },
+  "乖": {
+    "meaning": "听话，懂事，不惹麻烦；也机灵可爱。",
+    "words": [
+      "乖巧",
+      "乖孩子"
+    ],
+    "example": "妹妹是个乖巧的孩子，大家都喜欢她。",
+    "englishBridges": [
+      {
+        "zh": "乖巧",
+        "en": "well-behaved"
+      }
+    ]
+  },
+  "孩": {
+    "meaning": "儿童，小孩子，指年纪小的人。",
+    "words": [
+      "孩子",
+      "小孩"
+    ],
+    "example": "孩子们在公园里开心地放风筝。",
+    "englishBridges": [
+      {
+        "zh": "孩子",
+        "en": "child/kid"
+      }
+    ]
+  },
+  "积": {
+    "meaning": "积累，聚集；也指数学乘法的结果。",
+    "words": [
+      "积累",
+      "面积"
+    ],
+    "example": "通过每天阅读，我积累了很多好词好句。",
+    "englishBridges": [
+      {
+        "zh": "积累",
+        "en": "accumulate"
+      },
+      {
+        "zh": "面积",
+        "en": "area"
+      }
+    ]
+  },
+  "鲫": {
+    "meaning": "一种常见的淡水鱼，身体侧扁，背部灰黑。",
+    "words": [
+      "鲫鱼",
+      "金鲫"
+    ],
+    "example": "爷爷在河边钓到了一条活蹦乱跳的鲫鱼。",
+    "englishBridges": [
+      {
+        "zh": "鲫鱼",
+        "en": "crucian carp"
+      }
+    ]
+  },
+  "嫁": {
+    "meaning": "女子结婚，把女儿嫁给某人，或比喻转移责任。",
+    "words": [
+      "出嫁",
+      "嫁接"
+    ],
+    "example": "姐姐穿上漂亮的婚纱出嫁了。",
+    "englishBridges": [
+      {
+        "zh": "出嫁",
+        "en": "get married (for women)"
+      }
+    ]
+  },
+  "桨": {
+    "meaning": "划船用的工具，用手或机械推动船前进。",
+    "words": [
+      "船桨",
+      "划桨"
+    ],
+    "example": "我们用力划桨，小船向前驶去。",
+    "englishBridges": [
+      {
+        "zh": "船桨",
+        "en": "oar/paddle"
+      }
+    ]
+  },
+  "矫": {
+    "meaning": "纠正，改正；也指强壮、勇武的样子。",
+    "words": [
+      "矫正",
+      "矫健"
+    ],
+    "example": "医生帮他矫正了牙齿，现在笑得更美了。",
+    "englishBridges": [
+      {
+        "zh": "矫正",
+        "en": "correct/rectify"
+      }
+    ]
+  },
+  "骏": {
+    "meaning": "良马，跑得快的好马。",
+    "words": [
+      "骏马",
+      "骏逸"
+    ],
+    "example": "草原上，一群骏马在自由自在地奔跑。",
+    "englishBridges": [
+      {
+        "zh": "骏马",
+        "en": "steed"
+      }
+    ]
+  },
+  "扣": {
+    "meaning": "套住或搭住以固定，也指减去或扣留。",
+    "words": [
+      "纽扣",
+      "扣分"
+    ],
+    "example": "我的外套少了一颗纽扣，需要缝上。",
+    "englishBridges": [
+      {
+        "zh": "纽扣",
+        "en": "button"
+      }
+    ]
+  },
+  "窟": {
+    "meaning": "洞穴，人或动物居住的地方。",
+    "words": [
+      "石窟",
+      "窟窿"
+    ],
+    "example": "敦煌莫高窟里有非常多精美的壁画。",
+    "englishBridges": [
+      {
+        "zh": "石窟",
+        "en": "grottoes"
+      },
+      {
+        "zh": "窟窿",
+        "en": "hole"
+      }
+    ]
+  },
+  "敛": {
+    "meaning": "收起，聚集；也指约束自己的言行。",
+    "words": [
+      "收敛",
+      "敛财"
+    ],
+    "example": "听到批评后，他立刻收敛了调皮的行为。",
+    "englishBridges": [
+      {
+        "zh": "收敛",
+        "en": "restrain"
+      }
+    ]
+  },
+  "玲": {
+    "meaning": "形容玉石相击的声音，也形容精巧细致。",
+    "words": [
+      "玲珑",
+      "小巧玲珑"
+    ],
+    "example": "这个八音盒造型精致，真是小巧玲珑。",
+    "englishBridges": [
+      {
+        "zh": "玲珑",
+        "en": "exquisite"
+      },
+      {
+        "zh": "小巧玲珑",
+        "en": "small and exquisite"
+      }
+    ]
+  },
+  "漏": {
+    "meaning": "东西从孔或缝里滴下、透出或掉出。",
+    "words": [
+      "漏水",
+      "遗漏"
+    ],
+    "example": "屋顶有个洞，下雨天总是往下漏水。",
+    "englishBridges": [
+      {
+        "zh": "漏水",
+        "en": "leak water"
+      },
+      {
+        "zh": "遗漏",
+        "en": "omit"
+      }
+    ]
+  },
+  "吕": {
+    "meaning": "主要用作姓氏，是中国常见的百家姓之一。",
+    "words": [
+      "姓吕",
+      "吕布"
+    ],
+    "example": "我的同桌姓吕，他写字很漂亮。",
+    "englishBridges": [
+      {
+        "zh": "姓吕",
+        "en": "surname Lu"
+      }
+    ]
+  },
+  "麻": {
+    "meaning": "草本植物，纤维可织布；也指感觉不灵或混乱。",
+    "words": [
+      "麻烦",
+      "芝麻"
+    ],
+    "example": "这点小忙我能帮上，一点也不麻烦。",
+    "englishBridges": [
+      {
+        "zh": "麻烦",
+        "en": "trouble"
+      },
+      {
+        "zh": "芝麻",
+        "en": "sesame"
+      }
+    ]
+  },
+  "拇": {
+    "meaning": "手或脚的大指，即大拇指或大脚趾。",
+    "words": [
+      "拇指",
+      "大拇指"
+    ],
+    "example": "我竖起大拇指，夸奖弟弟做得真棒。",
+    "englishBridges": [
+      {
+        "zh": "拇指",
+        "en": "thumb"
+      }
+    ]
+  },
+  "聂": {
+    "meaning": "附耳小声说话；也用作姓氏。",
+    "words": [
+      "聂耳",
+      "姓聂"
+    ],
+    "example": "聂耳叔叔创作了著名的《义勇军进行曲》。",
+    "englishBridges": [
+      {
+        "zh": "聂耳",
+        "en": "Nie Er"
+      },
+      {
+        "zh": "姓聂",
+        "en": "surname Nie"
+      }
+    ]
+  },
+  "培": {
+    "meaning": "为了保护植物或墙基而堆土；也指培养。",
+    "words": [
+      "培养",
+      "培土"
+    ],
+    "example": "我们要从小培养良好的阅读习惯。",
+    "englishBridges": [
+      {
+        "zh": "培养",
+        "en": "cultivate"
+      },
+      {
+        "zh": "培土",
+        "en": "hill up soil"
+      }
+    ]
+  },
+  "赔": {
+    "meaning": "补偿损失；也指做买卖亏本。",
+    "words": [
+      "赔偿",
+      "赔礼"
+    ],
+    "example": "我不小心弄坏了同学的笔，主动向他赔礼道歉。",
+    "englishBridges": [
+      {
+        "zh": "赔偿",
+        "en": "compensate"
+      },
+      {
+        "zh": "赔礼",
+        "en": "apologize"
+      }
+    ]
+  },
+  "拼": {
+    "meaning": "合在一起，连接；也指不顾一切地努力去做。",
+    "words": [
+      "拼图",
+      "拼搏"
+    ],
+    "example": "我和弟弟一起完成了一幅大拼图。",
+    "englishBridges": [
+      {
+        "zh": "拼图",
+        "en": "jigsaw puzzle"
+      }
+    ]
+  },
+  "柒": {
+    "meaning": "数字七的大写形式，常用于票据防止涂改。",
+    "words": [
+      "柒元",
+      "柒月"
+    ],
+    "example": "这张发票上写着金额是柒拾元整。",
+    "englishBridges": [
+      {
+        "zh": "柒元",
+        "en": "seven yuan (formal)"
+      }
+    ]
+  },
+  "栖": {
+    "meaning": "鸟停在树上休息，泛指居住或停留。",
+    "words": [
+      "栖息",
+      "两栖"
+    ],
+    "example": "傍晚，小鸟飞回树林里栖息过夜。",
+    "englishBridges": [
+      {
+        "zh": "栖息",
+        "en": "perch"
+      },
+      {
+        "zh": "两栖",
+        "en": "amphibious"
+      }
+    ]
+  },
+  "骑": {
+    "meaning": "跨坐在牲畜或其他东西上行动。",
+    "words": [
+      "骑马",
+      "骑车"
+    ],
+    "example": "周末爸爸带我去公园骑自行车玩。",
+    "englishBridges": [
+      {
+        "zh": "骑马",
+        "en": "ride a horse"
+      },
+      {
+        "zh": "骑车",
+        "en": "ride a bike"
+      }
+    ]
+  },
+  "敲": {
+    "meaning": "打，击，使发出声音；也指通过打击进入。",
+    "words": [
+      "敲门",
+      "敲打"
+    ],
+    "example": "进房间前，请先轻轻敲敲门。",
+    "englishBridges": [
+      {
+        "zh": "敲门",
+        "en": "knock on door"
+      }
+    ]
+  },
+  "侵": {
+    "meaning": "进入内部进行干扰或伤害；逼近。",
+    "words": [
+      "侵犯",
+      "入侵"
+    ],
+    "example": "我们要保护个人隐私，不让别人侵犯。",
+    "englishBridges": [
+      {
+        "zh": "侵犯",
+        "en": "infringe"
+      },
+      {
+        "zh": "入侵",
+        "en": "invade"
+      }
+    ]
+  },
+  "戎": {
+    "meaning": "古代对兵器的统称，也指军队或军事。",
+    "words": [
+      "戎装",
+      "投笔从戎"
+    ],
+    "example": "叔叔穿上帅气的戎装，保卫我们的国家。",
+    "englishBridges": [
+      {
+        "zh": "戎装",
+        "en": "military uniform"
+      }
+    ]
+  },
+  "茸": {
+    "meaning": "草初生纤细柔软的样子，也指动物细软的毛。",
+    "words": [
+      "鹿茸",
+      "绿茸茸"
+    ],
+    "example": "草地上长出了绿茸茸的小草。",
+    "englishBridges": [
+      {
+        "zh": "绿茸茸",
+        "en": "soft green grass"
+      }
+    ]
+  },
+  "桑": {
+    "meaning": "桑树，叶子可以喂蚕，果实可以吃。",
+    "words": [
+      "桑叶",
+      "桑树"
+    ],
+    "example": "蚕宝宝最喜欢吃新鲜嫩绿的桑叶。",
+    "englishBridges": [
+      {
+        "zh": "桑叶",
+        "en": "mulberry leaf"
+      },
+      {
+        "zh": "桑树",
+        "en": "mulberry tree"
+      }
+    ]
+  },
+  "师": {
+    "meaning": "传授知识或技术的人，也指擅长某种技能的人。",
+    "words": [
+      "老师",
+      "厨师"
+    ],
+    "example": "语文老师教我们写了很多有趣的汉字。",
+    "englishBridges": [
+      {
+        "zh": "老师",
+        "en": "teacher"
+      },
+      {
+        "zh": "厨师",
+        "en": "chef"
+      }
+    ]
+  },
+  "士": {
+    "meaning": "指人，常用于某些职业或身份的名称中。",
+    "words": [
+      "护士",
+      "战士"
+    ],
+    "example": "生病时，温柔的护士阿姨细心地照顾我。",
+    "englishBridges": [
+      {
+        "zh": "护士",
+        "en": "nurse"
+      },
+      {
+        "zh": "战士",
+        "en": "soldier"
+      }
+    ]
+  },
+  "收": {
+    "meaning": "拿到，接受，把散开的东西聚拢或整理好。",
+    "words": [
+      "收拾",
+      "收到"
+    ],
+    "example": "请把你的玩具收拾好，放回箱子里。",
+    "englishBridges": [
+      {
+        "zh": "收拾",
+        "en": "tidy up"
+      }
+    ]
+  },
+  "殊": {
+    "meaning": "表示特别、不一样，或者程度很深，常用来形容事物很独特。",
+    "words": [
+      "特殊",
+      "殊荣"
+    ],
+    "example": "这是一份特殊的礼物，我非常喜欢。",
+    "englishBridges": [
+      {
+        "zh": "特殊",
+        "en": "special"
+      }
+    ]
+  },
+  "赎": {
+    "meaning": "用财物换回抵押品或人身自由，弥补过错。",
+    "words": [
+      "赎回",
+      "赎罪"
+    ],
+    "example": "爸爸去当铺赎回了那块手表。",
+    "englishBridges": [
+      {
+        "zh": "赎回",
+        "en": "redeem"
+      }
+    ]
+  },
+  "说": {
+    "meaning": "用话来表达意思，讲述事情或观点。",
+    "words": [
+      "说话",
+      "说明"
+    ],
+    "example": "老师正在耐心地给我们说明这道题的做法。",
+    "englishBridges": [
+      {
+        "zh": "说话",
+        "en": "speak"
+      },
+      {
+        "zh": "说明",
+        "en": "explain"
+      }
+    ]
+  },
+  "汰": {
+    "meaning": "去掉不好的，留下好的，常用于比赛或选拔中去除弱者。",
+    "words": [
+      "淘汰",
+      "汰换"
+    ],
+    "example": "他在比赛中没有被淘汰，进入了决赛。",
+    "englishBridges": [
+      {
+        "zh": "淘汰",
+        "en": "eliminate"
+      }
+    ]
+  },
+  "絮": {
+    "meaning": "棉花揉成的松散团状物，也指像棉絮的东西。",
+    "words": [
+      "柳絮",
+      "棉絮"
+    ],
+    "example": "春天来了，白色的柳絮在空中飞舞。",
+    "englishBridges": [
+      {
+        "zh": "柳絮",
+        "en": "willow catkin"
+      },
+      {
+        "zh": "棉絮",
+        "en": "cotton wadding"
+      }
+    ]
+  },
+  "艺": {
+    "meaning": "才能，技能，特指音乐、绘画等表演或创作技巧。",
+    "words": [
+      "艺术",
+      "才艺"
+    ],
+    "example": "他在学校艺术节上展示了钢琴才艺。",
+    "englishBridges": [
+      {
+        "zh": "艺术",
+        "en": "art"
+      }
+    ]
+  },
+  "姻": {
+    "meaning": "指男女结为夫妻的关系，通常与婚姻有关。",
+    "words": [
+      "婚姻",
+      "姻缘"
+    ],
+    "example": "哥哥和嫂子举行了幸福的婚礼，庆祝他们的婚姻。",
+    "englishBridges": [
+      {
+        "zh": "婚姻",
+        "en": "marriage"
+      }
+    ]
+  },
+  "勇": {
+    "meaning": "有胆量，敢做，不怕危险和困难。",
+    "words": [
+      "勇敢",
+      "勇气"
+    ],
+    "example": "消防员叔叔非常勇敢，救出了被困的人。",
+    "englishBridges": [
+      {
+        "zh": "勇敢",
+        "en": "brave"
+      }
+    ]
+  },
+  "愉": {
+    "meaning": "快乐，高兴。",
+    "words": [
+      "愉快",
+      "愉悦"
+    ],
+    "example": "我们在公园里度过了一个愉快的下午。",
+    "englishBridges": [
+      {
+        "zh": "愉快",
+        "en": "happy"
+      },
+      {
+        "zh": "愉悦",
+        "en": "joyful"
+      }
+    ]
+  },
+  "针": {
+    "meaning": "缝衣物用的细长工具，也指注射用的医疗器械。",
+    "words": [
+      "针线",
+      "打针"
+    ],
+    "example": "妈妈用针线帮我把扣子缝好了。",
+    "englishBridges": [
+      {
+        "zh": "针线",
+        "en": "needle and thread"
+      }
+    ]
+  },
+  "正": {
+    "meaning": "不偏斜，符合法则或标准；也指正面。",
+    "words": [
+      "正确",
+      "正好"
+    ],
+    "example": "你回答得非常正确，老师为你点赞。",
+    "englishBridges": [
+      {
+        "zh": "正确",
+        "en": "correct"
+      },
+      {
+        "zh": "正好",
+        "en": "just right"
+      }
+    ]
+  },
+  "只": {
+    "meaning": "用于动物或某些成对物品中的一个，也作量词使用。",
+    "words": [
+      "一只",
+      "只有"
+    ],
+    "example": "树上有一只小鸟在唱歌。",
+    "englishBridges": [
+      {
+        "zh": "一只",
+        "en": "one (measure word)"
+      }
+    ]
+  },
+  "衷": {
+    "meaning": "内心，真心实意，常用来表达发自内心的情感。",
+    "words": [
+      "衷心",
+      "苦衷"
+    ],
+    "example": "我衷心感谢老师对我的帮助。",
+    "englishBridges": [
+      {
+        "zh": "衷心",
+        "en": "heartfelt"
+      }
+    ]
+  },
+  "总": {
+    "meaning": "全部，概括，一直，经常；也指统领。",
+    "words": [
+      "总是",
+      "总共"
+    ],
+    "example": "他上学总是迟到，被老师批评了。",
+    "englishBridges": [
+      {
+        "zh": "总是",
+        "en": "always"
+      }
+    ]
+  }
+}

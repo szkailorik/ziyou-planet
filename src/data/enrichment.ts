@@ -3,8 +3,11 @@ import type { CharacterEntry } from '../types';
 import { ENGLISH_BRIDGES } from './english-bridges';
 import { CHARACTER_FAMILY_BY_CHAR } from './character-families';
 import { CLASSIC_BY_CHAR, IDIOM_BY_CHAR } from './cultural-connections';
+import generatedTeaching from './generated-teaching.json';
 
 type Enrichment = Pick<CharacterEntry, 'words' | 'example' | 'scene' | 'confusables'>;
+type GeneratedTeaching = { meaning: string; words: string[]; example: string; englishBridges: Array<{ zh: string; en: string }> };
+const GENERATED_TEACHING = generatedTeaching as Record<string, GeneratedTeaching>;
 
 export const SEED_ORDER = Array.from(
   '一二三十百千万人个大小多少上下中天地日月山水火木土石田禾口耳目手足心力男女子父母爸妈爷奶我你他她我们的是有在不这那来去看听说读写学生老师学校家国门开关早晚今天明年春夏秋冬东西南北风雨云雪花草树鸟鱼虫猫狗马牛羊米饭果菜衣车路灯书本笔纸桌椅'
@@ -94,7 +97,8 @@ const orderedChars = [
 export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex) => {
   const officialIndex = sourceIndex.get(char)!;
   const curated = enrichment[char];
-  const wordHints = curated?.words ?? seedWords[char] ?? [];
+  const generated = GENERATED_TEACHING[char];
+  const wordHints = curated?.words ?? seedWords[char] ?? generated?.words ?? [];
   const classic = CLASSIC_BY_CHAR.get(char);
   const idiom = IDIOM_BY_CHAR.get(char);
   const unicode = char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0');
@@ -106,13 +110,13 @@ export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex
     productBand: productIndex < 300 ? 'seed' : productIndex < 3000 ? 'core' : 'extended',
     pinyin: CURRICULUM_PINYIN[officialIndex],
     words: wordHints,
-    example: curated?.example ?? (wordHints.length ? `读一读：${wordHints.join('，')}。` : '这个字已经收进课程常用字库，更多词语正在审核。'),
+    example: curated?.example ?? generated?.example ?? (wordHints.length ? `读一读：${wordHints.join('，')}。` : '这个字已经收进课程常用字库，更多词语正在审核。'),
     classic,
     idiom,
     theme: themes.find((item) => item.chars.includes(char))?.name ?? '课程常用字',
     scene: curated?.scene ?? '课程阅读与日常书面语中会见到',
     confusables: curated?.confusables ?? [],
-    englishBridges: ENGLISH_BRIDGES[char] ?? [],
+    englishBridges: ENGLISH_BRIDGES[char] ?? generated?.englishBridges ?? [],
     characterFamily: CHARACTER_FAMILY_BY_CHAR.get(char),
     contentStatus: curated ? 'reviewed' : 'basic'
   };
