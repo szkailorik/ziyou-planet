@@ -39,6 +39,11 @@ export type CharacterEntry = {
     meaning: string;
     example: string;
   };
+  idioms?: Array<{
+    text: string;
+    meaning: string;
+    example: string;
+  }>;
   theme: string;
   scene: string;
   confusables: string[];

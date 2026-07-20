@@ -470,16 +470,29 @@ function ContextBridge({ entry, compact = false, showEnglish = false, essentials
 }
 
 function CulturalBridge({ entry }: { entry: CharacterEntry }) {
-  if (!entry.idiom && !entry.classic) return null;
-  const labels = [entry.idiom && '成语', entry.classic && '古诗名句'].filter(Boolean).join(' + ');
+  const idioms = entry.idioms?.length ? entry.idioms : entry.idiom ? [entry.idiom] : [];
+  if (idioms.length === 0 && !entry.classic) return null;
+  const labels = [idioms.length > 0 && `${idioms.length} 个相关成语`, entry.classic && '古诗名句'].filter(Boolean).join(' + ');
   return <details className="cultural-bridge"><summary><span>文化彩蛋</span><div><strong>{labels}</strong><small>答后选看 · 不计分、不要求背诵</small></div><i aria-hidden="true">＋</i></summary><div className="cultural-content">
-    {entry.idiom && <article className="culture-item culture-item--idiom"><span>成语</span><div><h3>{entry.idiom.text}</h3><p>{entry.idiom.meaning}</p><small>怎么用：{entry.idiom.example}</small></div></article>}
+    {idioms.length > 0 && <IdiomBridge idioms={idioms} targetChar={entry.char} />}
     {entry.classic && <article className="culture-item culture-item--classic"><span>名句</span><div>{entry.classic.image && <figure className="classic-scene"><img src={entry.classic.image} alt={entry.classic.imageAlt ?? `${entry.classic.title}情境复原图`} loading="lazy" decoding="async" /><figcaption>原创情境复原图 · 不是历史照片或作者肖像</figcaption></figure>}<blockquote>{entry.classic.line}</blockquote><cite>{entry.classic.dynasty} · {entry.classic.author}《{entry.classic.title}》</cite><p>{entry.classic.note}</p><details className="research-note"><summary>时代与画面考据 <b>{entry.classic.evidenceLevel}</b></summary><p><strong>我们能确定：</strong>{entry.classic.historicalContext}</p><p><strong>画面怎么处理：</strong>{entry.classic.visualBasis}</p></details></div></article>}
   </div></details>;
 }
 
+function IdiomBridge({ idioms, targetChar, compact = false }: { idioms: NonNullable<CharacterEntry['idioms']>; targetChar: string; compact?: boolean }) {
+  const visible = compact ? idioms.slice(0, 1) : idioms.slice(0, 6);
+  const remaining = idioms.slice(visible.length);
+  return <section className={compact ? 'idiom-bridge idiom-bridge--compact' : 'idiom-bridge'} aria-label="和这个字有关的常用成语">
+    <header><span>成语</span><div><small>含“{targetChar}”的常用成语</small>{compact && <strong>{visible[0].text}</strong>}</div></header>
+    <div className="idiom-list">{visible.map((item) => <article key={item.text}>{!compact && <h3>{item.text}</h3>}<p>{item.meaning}</p>{!compact && <small>怎么用：{item.example}</small>}</article>)}</div>
+    {compact && <small className="idiom-example">怎么用：{visible[0].example}</small>}
+    {remaining.length > 0 && <details className="idiom-more"><summary>再看 {remaining.length} 个相关成语</summary><div>{remaining.map((item) => <article key={item.text}><b>{item.text}</b><p>{item.meaning}</p><small>{item.example}</small></article>)}</div></details>}
+  </section>;
+}
+
 function Feedback({ entry, confidence, settings }: { entry: CharacterEntry; confidence: Confidence; settings: ChildSession }) {
-  return <div className="feedback-panel teaching-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : '现在就教你'}</span><h2><b>{entry.char}</b> {entry.pinyin}</h2></div><QwenSpeechButton request={{ kind: 'character', character: entry.char }} enabled={settings.sound} className="sound-button" readyLabel="听读音" playingLabel="停止" preparingLabel="准备中…" ariaLabel={`用阿里云 Qwen3-TTS 播放${entry.char}`} fallbackText={entry.char} fallbackRate={0.78} /></div><div className="meaning-bridge"><span>字义</span><p>{teachingMeaning(entry)}</p></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} essentialsOnly /><details className="teaching-more"><summary>再看一个小提示</summary><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div></details><p className="evidence-note">先记住读音和一个词；稍后换个句子再认一次，才会真正变熟。</p></div>;
+  const idioms = entry.idioms?.length ? entry.idioms : entry.idiom ? [entry.idiom] : [];
+  return <div className="feedback-panel teaching-panel" role="status" aria-live="polite"><div className="feedback-head"><div><span>{confidence === 'sure' ? '答得很有信心' : '现在就教你'}</span><h2><b>{entry.char}</b> {entry.pinyin}</h2></div><QwenSpeechButton request={{ kind: 'character', character: entry.char }} enabled={settings.sound} className="sound-button" readyLabel="听读音" playingLabel="停止" preparingLabel="准备中…" ariaLabel={`用阿里云 Qwen3-TTS 播放${entry.char}`} fallbackText={entry.char} fallbackRate={0.78} /></div><div className="meaning-bridge"><span>字义</span><p>{teachingMeaning(entry)}</p></div><ContextBridge entry={entry} showEnglish={settings.englishBridge} essentialsOnly />{idioms.length > 0 && <IdiomBridge idioms={idioms} targetChar={entry.char} compact />}<details className="teaching-more"><summary>再看一个小提示</summary><div className="feedback-grid"><div><small>我在哪里见过</small><p>{entry.scene}</p></div>{entry.confusables.length > 0 && <div><small>别看错了</small><p>{entry.confusables.join('、')}</p></div>}</div></details><p className="evidence-note">先记住读音和一个词；稍后换个句子再认一次，才会真正变熟。</p></div>;
 }
 
 function Review({ settings, attempts, progress, addAttempt, onFocusChange }: { settings: ChildSession; attempts: AttemptEvent[]; progress: ReturnType<typeof progressFromAttempts>; addAttempt: (event: AttemptEvent) => Promise<void>; onFocusChange: (active: boolean) => void }) {
@@ -589,7 +602,7 @@ function Library({ progress, showEnglish }: { progress: ReturnType<typeof progre
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [selected]);
   const matches = useMemo(() => CHARACTERS.filter((entry) => {
-    const queryMatch = !query || entry.char.includes(query) || entry.pinyin.toLowerCase().includes(query.toLowerCase()) || entry.words.some((word) => word.includes(query)) || entry.idiom?.text.includes(query) || entry.classic?.line.includes(query) || entry.classic?.title.includes(query) || entry.classic?.author.includes(query) || (showEnglish && entry.englishBridges.some((bridge) => bridge.en.toLowerCase().includes(query.toLowerCase())));
+    const queryMatch = !query || entry.char.includes(query) || entry.pinyin.toLowerCase().includes(query.toLowerCase()) || entry.words.some((word) => word.includes(query)) || entry.idioms?.some((idiom) => idiom.text.includes(query)) || entry.idiom?.text.includes(query) || entry.classic?.line.includes(query) || entry.classic?.title.includes(query) || entry.classic?.author.includes(query) || (showEnglish && entry.englishBridges.some((bridge) => bridge.en.toLowerCase().includes(query.toLowerCase())));
     const filterMatch = filter === 'all' || (filter === 'list1' && entry.curriculumList === 1) || (filter === 'list2' && entry.curriculumList === 2) || (filter === 'learned' && progress.has(entry.id));
     return queryMatch && filterMatch;
   }), [query, filter, progress, showEnglish]);

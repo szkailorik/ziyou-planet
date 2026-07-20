@@ -27,6 +27,8 @@ describe('character catalog', () => {
     expect(one.idiom?.text).toBe('一心一意');
     expect(one.idiom?.meaning).toContain('专心');
     expect(one.idiom?.example).toContain('积木');
+    expect(one.idioms!.length).toBeGreaterThan(15);
+    expect(one.idioms!.every((idiom) => idiom.text.includes('一'))).toBe(true);
   });
 
   it('keeps every objectively reviewed character inside its practice sentence', () => {

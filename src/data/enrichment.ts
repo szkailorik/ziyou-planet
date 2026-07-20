@@ -2,7 +2,8 @@ import { CURRICULUM_CHARACTERS, CURRICULUM_PINYIN } from './curriculum-character
 import type { CharacterEntry } from '../types';
 import { ENGLISH_BRIDGES } from './english-bridges';
 import { CHARACTER_FAMILY_BY_CHAR } from './character-families';
-import { CLASSIC_BY_CHAR, IDIOM_BY_CHAR } from './cultural-connections';
+import { CLASSIC_BY_CHAR } from './cultural-connections';
+import { IDIOMS_BY_CHAR } from './primary-idioms';
 import generatedTeaching from './generated-teaching.json';
 
 type Enrichment = Pick<CharacterEntry, 'words' | 'example' | 'scene' | 'confusables'>;
@@ -100,7 +101,8 @@ export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex
   const generated = GENERATED_TEACHING[char];
   const wordHints = curated?.words ?? seedWords[char] ?? generated?.words ?? [];
   const classic = CLASSIC_BY_CHAR.get(char);
-  const idiom = IDIOM_BY_CHAR.get(char);
+  const idioms = IDIOMS_BY_CHAR.get(char) ?? [];
+  const idiom = idioms[0];
   const unicode = char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0');
   return {
     id: officialIndex + 1,
@@ -113,6 +115,7 @@ export const CHARACTERS: CharacterEntry[] = orderedChars.map((char, productIndex
     example: curated?.example ?? generated?.example ?? (wordHints.length ? `读一读：${wordHints.join('，')}。` : '这个字已经收进课程常用字库，更多词语正在审核。'),
     classic,
     idiom,
+    idioms,
     theme: themes.find((item) => item.chars.includes(char))?.name ?? '课程常用字',
     scene: curated?.scene ?? '课程阅读与日常书面语中会见到',
     confusables: curated?.confusables ?? [],
