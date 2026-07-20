@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CHARACTER_BY_ID, CHARACTERS } from './data/enrichment';
+import { PRIMARY_IDIOM_EXHIBITS, type IdiomCategory, type IdiomExhibit } from './data/idiom-exhibits';
 import { PRIMARY_POEMS, type PrimaryPoem } from './data/primary-poems';
 import { teachingMeaning } from './data/teaching-bridges';
 import { clearAllData, db, exportBackup, hasParentPin, importBackup, loadSettings, loadSyncMeta, migrateSettings, replaceFromCloud, saveSettings, setParentPin, verifyParentPin } from './db';
@@ -8,10 +9,11 @@ import { coverageSampleIds, estimateLiteracy, placementSampleIds, weaknessSample
 import { makeContextChoices, makeContextPrompt, makePinyinChoices, reviewCandidateIds, reviewModeFor, type ObjectiveReviewMode } from './domain/review';
 import QwenSpeechButton, { stopQwenSpeech } from './QwenSpeechButton';
 import PoetryTrainer from './PoetryTrainer';
+import IdiomThumbnail from './IdiomThumbnail';
 import { createCloudFamily, createDeviceInvite, getCloudStatus, joinCloudFamily, leaveCloudFamily, syncCloudState, type CloudSnapshot } from './sync';
 import type { AppSettings, AttemptEvent, BackupPayload, CharacterEntry, ChildAvatar, ChildProfile, Confidence, MasteryState } from './types';
 
-type View = 'home' | 'scan' | 'review' | 'library' | 'poetry' | 'report';
+type View = 'home' | 'scan' | 'review' | 'library' | 'idioms' | 'poetry' | 'report';
 type ScanKind = 'placement' | 'coverage' | 'weakness';
 type ScanSession = { ids: number[]; index: number; size: number; kind: ScanKind; startedAt: string };
 type ChildSession = { childId: string; nickname: string; dailyMinutes: 5 | 10 | 15; sound: boolean; englishBridge: boolean };
@@ -72,6 +74,7 @@ export default function App() {
   const [parentPinConfigured, setParentPinConfigured] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [cloud, setCloud] = useState<CloudUiState>({ status: 'checking' });
+  const [idiomFocus, setIdiomFocus] = useState('');
   const syncInFlight = useRef(false);
   const lastAutoSyncKey = useRef('');
 
@@ -104,6 +107,20 @@ export default function App() {
     const timer = window.setTimeout(() => setToast(''), 2400);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const openIdiomHall = (event: Event) => {
+      const text = (event as CustomEvent<string>).detail;
+      if (!text) return;
+      setIdiomFocus(text);
+      setParentUnlocked(false);
+      setFocusMode(false);
+      setView('idioms');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('open-idiom-hall', openIdiomHall);
+    return () => window.removeEventListener('open-idiom-hall', openIdiomHall);
+  }, []);
 
   useEffect(() => {
     const lockWhenHidden = () => {
@@ -227,6 +244,7 @@ export default function App() {
 
   function navigate(next: View) {
     if (next !== 'report') setParentUnlocked(false);
+    if (next !== 'idioms') setIdiomFocus('');
     setFocusMode(false);
     setView(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -249,6 +267,7 @@ export default function App() {
           <NavButton active={view === 'scan'} icon="◎" label="识字扫描" onClick={() => navigate('scan')} />
           <NavButton active={view === 'review'} icon="↻" label="复习乐园" onClick={() => navigate('review')} badge={stats.due} />
           <NavButton active={view === 'library'} icon="▦" label="我的字册" onClick={() => navigate('library')} />
+          <NavButton active={view === 'idioms'} icon="成" label="成语馆" onClick={() => navigate('idioms')} />
           <NavButton active={view === 'poetry'} icon="诗" label="诗词馆" onClick={() => navigate('poetry')} />
         </nav>
         <button className="parent-button" onClick={() => navigate('report')}><span>◒</span> 家长中心</button>
@@ -259,6 +278,7 @@ export default function App() {
         {view === 'scan' && <Scan settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} onFinish={() => { setToast(`${activeChild.nickname} 的扫描已保存`); navigate('home'); }} />}
         {view === 'review' && <Review settings={childSettings} attempts={childAttempts} progress={progress} addAttempt={addAttempt} onFocusChange={setFocusMode} />}
         {view === 'library' && <Library progress={progress} showEnglish={settings.englishBridge} />}
+        {view === 'idioms' && <IdiomLibrary initialText={idiomFocus} />}
         {view === 'poetry' && <PoetryLibrary learnerName={activeChild.nickname} />}
         {view === 'report' && (
           parentUnlocked
@@ -324,6 +344,11 @@ function Home({ settings, stats, progress, onNavigate }: { settings: ChildSessio
       <section className="poetry-invite">
         <div><span className="poetry-invite-mark" aria-hidden="true">诗</span><p><span className="eyebrow">小学诗词馆 · 75 篇</span><strong>看一幅画，走进一句诗</strong><small>完整诗文、儿童释义、朝代背景和考据画面都在这里；自由探索，不计入识字分数。</small></p></div>
         <button className="primary-button" onClick={() => onNavigate('poetry')}>进入诗词馆 <span>→</span></button>
+      </section>
+
+      <section className="idiom-invite">
+        <div><span className="idiom-invite-mark" aria-hidden="true">成</span><p><span className="eyebrow">儿童成语馆 · {PRIMARY_IDIOM_EXHIBITS.length} 条</span><strong>看一幅小图，真正懂一个成语</strong><small>白话解释、生活例句和本意考据都准备好了；自由探索，不计入识字分数。</small></p></div>
+        <button className="primary-button" onClick={() => onNavigate('idioms')}>进入成语馆 <span>→</span></button>
       </section>
 
       <section className="route-card">
@@ -486,6 +511,7 @@ function IdiomBridge({ idioms, targetChar, compact = false }: { idioms: NonNulla
     <header><span>成语</span><div><small>含“{targetChar}”的常用成语</small>{compact && <strong>{visible[0].text}</strong>}</div></header>
     <div className="idiom-list">{visible.map((item) => <article key={item.text}>{!compact && <h3>{item.text}</h3>}<p>{item.meaning}</p>{!compact && <small>怎么用：{item.example}</small>}</article>)}</div>
     {compact && <small className="idiom-example">怎么用：{visible[0].example}</small>}
+    {compact && <button type="button" className="idiom-hall-link" onClick={() => window.dispatchEvent(new CustomEvent('open-idiom-hall', { detail: visible[0].text }))}>去成语馆看小图 →</button>}
     {remaining.length > 0 && <details className="idiom-more"><summary>再看 {remaining.length} 个相关成语</summary><div>{remaining.map((item) => <article key={item.text}><b>{item.text}</b><p>{item.meaning}</p><small>{item.example}</small></article>)}</div></details>}
   </section>;
 }
@@ -612,6 +638,59 @@ function Library({ progress, showEnglish }: { progress: ReturnType<typeof progre
     <div className="character-grid">{matches.slice(0, visible).map((entry) => { const item = progress.get(entry.id); return <button type="button" onClick={() => setSelected(entry)} aria-label={`${entry.char}，${entry.pinyin}，${item ? STATE_LABEL[item.state] : '未测'}`} className={`character-tile tile--${item?.state ?? 'untested'}`} key={entry.id}><div><strong>{entry.char}</strong><span>{entry.pinyin}</span></div><small>{item ? STATE_LABEL[item.state] : `字表${entry.curriculumList === 1 ? '一' : '二'}`}</small>{entry.contentStatus === 'reviewed' && <b title="词语与场景已审核">✓</b>}</button>; })}</div>
     {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 180)}>再显示 180 个</button>}
     {selected && <div className="character-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><section className="character-dialog" role="dialog" aria-modal="true" aria-labelledby="character-dialog-title" onClick={(event) => event.stopPropagation()}><button className="dialog-close" aria-label="关闭字详情" onClick={() => setSelected(null)}>×</button><div className="dialog-glyph">{selected.char}</div><div><span className="eyebrow">{selected.theme} · 课标字表{selected.curriculumList === 1 ? '一' : '二'} · {selected.contentStatus === 'reviewed' ? '内容已审核' : '基础条目'}</span><h2 id="character-dialog-title">{selected.char} <small>{selected.pinyin}</small></h2><ContextBridge entry={selected} compact showEnglish={showEnglish} /><p><strong>生活线索：</strong>{selected.scene}</p><p><strong>学习状态：</strong>{progress.get(selected.id) ? STATE_LABEL[progress.get(selected.id)!.state] : '未测'}</p><p className="source-note">公版古诗文会注明作者与篇名；教材原句须按版本和授权另行维护。基础条目的拼音只作检索提示，不进入客观读音判分。</p></div></section></div>}
+  </div>;
+}
+
+const IDIOM_CATEGORIES: Array<{ value: 'all' | IdiomCategory; label: string }> = [
+  { value: 'all', label: `全部 ${PRIMARY_IDIOM_EXHIBITS.length}` },
+  { value: 'numbers', label: '数字与时间' },
+  { value: 'nature', label: '自然景物' },
+  { value: 'animals', label: '动物故事' },
+  { value: 'learning', label: '学习成长' },
+  { value: 'character', label: '品格合作' },
+  { value: 'action', label: '动作与表达' }
+];
+
+function IdiomLibrary({ initialText = '' }: { initialText?: string }) {
+  const [query, setQuery] = useState(initialText);
+  const [category, setCategory] = useState<'all' | IdiomCategory>('all');
+  const [visible, setVisible] = useState(24);
+  const [selected, setSelected] = useState<IdiomExhibit | null>(null);
+  useEffect(() => {
+    if (!initialText) return;
+    setQuery(initialText);
+    setCategory('all');
+    setVisible(24);
+    setSelected(PRIMARY_IDIOM_EXHIBITS.find((item) => item.text === initialText) ?? null);
+  }, [initialText]);
+  useEffect(() => {
+    if (!selected) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelected(null); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [selected]);
+  const matches = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return PRIMARY_IDIOM_EXHIBITS.filter((item) => {
+      const haystack = [item.text, item.meaning, item.example, item.originNote, item.sourceLabel ?? ''].join(' ').toLowerCase();
+      return (category === 'all' || item.category === category) && (!normalized || haystack.includes(normalized));
+    });
+  }, [category, query]);
+  return <div className="page idiom-page">
+    <section className="idiom-hero"><div><span className="eyebrow">儿童成语馆 · {PRIMARY_IDIOM_EXHIBITS.length} 条</span><h1>一幅小图，<br />看懂一个成语</h1><p>先看儿童能懂的白话意思，再看怎么用；有可靠典故的注明原典，没有单一出处的就老老实实按本义或现代用法讲。</p></div><div className="idiom-hero-seal" aria-hidden="true"><span>成</span><small>看图 · 懂意<br />会用 · 不硬背</small></div></section>
+    <div className="library-toolbar idiom-toolbar"><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="搜索成语、意思或例句" value={query} onChange={(event) => { setQuery(event.target.value); setVisible(24); }} placeholder="搜成语、一个字或它的意思" /></label><div className="filter-pills">{IDIOM_CATEGORIES.map((item) => <button aria-pressed={category === item.value} key={item.value} className={category === item.value ? 'active' : ''} onClick={() => { setCategory(item.value); setVisible(24); }}>{item.label}</button>)}</div></div>
+    <div className="idiom-summary"><span>找到 <b>{matches.length}</b> 条</span><span>小图只帮助理解，不代替成语解释，也不计入识字分数</span></div>
+    <section className="idiom-grid" aria-label="儿童常用成语">
+      {matches.slice(0, visible).map((item) => <button type="button" className="idiom-card" key={item.text} onClick={() => setSelected(item)}><IdiomThumbnail idiom={item} /><div><span>{item.originType}</span><h2>{item.text}</h2><p>{item.meaning}</p><small>看看本意和用法 →</small></div></button>)}
+    </section>
+    {matches.length === 0 && <div className="poetry-empty"><strong>还没有找到这个成语</strong><p>可以输入其中一个字，或者试试“学习”“春天”“高兴”。</p></div>}
+    {visible < matches.length && <button className="secondary-button centered" onClick={() => setVisible((count) => count + 24)}>再展开 24 条</button>}
+    <p className="source-note idiom-source">“常用”是面向儿童识字与阅读建立的产品精选集合，不冒充全国统一成语表；原典只在可核验时标注，其他条目不强行编故事。</p>
+    {selected && <div className="idiom-dialog-backdrop" role="presentation" onClick={() => setSelected(null)}><article className="idiom-dialog" role="dialog" aria-modal="true" aria-labelledby="idiom-dialog-title" onClick={(event) => event.stopPropagation()}>
+      <button className="dialog-close" aria-label="关闭成语详情" onClick={() => setSelected(null)}>×</button>
+      <div className="idiom-dialog-visual"><IdiomThumbnail idiom={selected} large /><small>原创轻量情境图 · {selected.originType}</small></div>
+      <div className="idiom-dialog-copy"><span className="eyebrow">第 {selected.id} / {PRIMARY_IDIOM_EXHIBITS.length} 条 · {IDIOM_CATEGORIES.find((item) => item.value === selected.category)?.label}</span><h2 id="idiom-dialog-title">{selected.text}</h2><section className="idiom-meaning-card"><span>意思</span><p>{selected.meaning}</p></section><section className="idiom-example-card"><span>怎么用</span><p>{selected.example}</p></section><section className="idiom-origin-card"><header><span>考</span><div><small>{selected.originType}</small><strong>本意、典故和画面边界</strong></div></header><p>{selected.originNote}</p><p><b>小图为什么这样画：</b>{selected.visualBasis}</p>{selected.sourceLabel && (selected.sourceUrl ? <a href={selected.sourceUrl} target="_blank" rel="noreferrer">核对原典：{selected.sourceLabel} ↗</a> : <small className="idiom-source-label">原典线索：{selected.sourceLabel}</small>)}</section><section className="idiom-character-row"><strong>里面这四个字</strong><div>{Array.from(selected.text).map((char, index) => <span key={`${char}-${index}`}>{char}</span>)}</div><small>在成语馆看见这些字，不会自动算作“已经认识”。</small></section></div>
+    </article></div>}
   </div>;
 }
 
