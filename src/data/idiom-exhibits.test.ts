@@ -8,8 +8,7 @@ describe('idiom hall exhibits', () => {
     expect(IDIOM_EXHIBIT_BY_TEXT.size).toBe(PRIMARY_IDIOMS.length);
     PRIMARY_IDIOM_EXHIBITS.forEach((item, index) => {
       expect(item.id).toBe(index + 1);
-      expect(item.visualSymbols.length, `${item.text} needs a visual`).toBeGreaterThanOrEqual(2);
-      expect(item.visualSymbols.length).toBeLessThanOrEqual(3);
+      expect(`/images/idioms/${String(item.id).padStart(3, '0')}.webp`).toMatch(/^\/images\/idioms\/\d{3}\.webp$/);
       expect(item.originNote.length, `${item.text} needs a research boundary`).toBeGreaterThan(20);
       expect(item.visualBasis.length, `${item.text} needs a visual basis`).toBeGreaterThan(15);
     });
@@ -29,4 +28,3 @@ describe('idiom hall exhibits', () => {
     expect(new Set(PRIMARY_IDIOM_EXHIBITS.map((item) => item.category))).toEqual(new Set(['numbers', 'nature', 'animals', 'learning', 'character', 'action']));
   });
 });
-

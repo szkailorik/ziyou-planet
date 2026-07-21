@@ -384,3 +384,4 @@ main { flex: 1; }
   .poetry-result-grid { grid-template-columns: 1fr 1fr; }.poetry-wrong-list article { grid-template-columns: 1fr; gap: 6px; }.poetry-result-actions { display: grid; }.poetry-result-actions button { width: 100%; }
 }
 .idiom-source-label { display: inline-block; margin-top: 10px; color: #7a4b38; font-size: 9px; font-weight: 800; }
+.idiom-thumbnail { object-fit: cover; }
